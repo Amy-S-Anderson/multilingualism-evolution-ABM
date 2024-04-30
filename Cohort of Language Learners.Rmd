@@ -29,7 +29,7 @@ N = 100
 languages <- c("A", "B", "C")
 
 # Set number of years to run simulation
-tmax = 70
+tmax = 74
 
 ```
 
@@ -136,131 +136,173 @@ plot_grid(rate_plot, prof_plot, ncol = 2)
   
   
 The function below will **update the language bank** for every individual in the cohort based on their interaction with another agent. 
+       
 ```{r}
 
-# Define a FUNCTION to update language bank for each pair
+### Define a FUNCTION to update everyone's language bank across multiple years of model time, as a function of age and social exposure to language. 
 
-update_language_bank <- function(pair, t) {
-  # Identify the interlocutors
-  speaker1 <- pair[1]
-  speaker2 <- pair[2]
-  
-  # Identify the languages currently known by each agent
-  speaker1_languages <- names(purrr::keep(language_bank[[speaker1]], function(x) all(x > 0)))
-  speaker2_languages <- names(purrr::keep(language_bank[[speaker2]], function(x) all(x > 0)))
-  
-  # Each speaker picks a language to speak —- sampled at random from each individual's language bank
-  speaker1_says <- sample(speaker1_languages, 1)
-  speaker2_says <- sample(speaker2_languages, 1)
-  
-  # If speaker2 recognizes the language spoken by speaker1, then exposure to it improves their proficiency
-  if (speaker1_says %in% speaker2_languages) {
-    # The amount of proficiency gained is a function of the listener's age.
-    age_factor <- 100^(1/(t + 0.5))
-    language_bank[[speaker2]][[speaker1_says]][t + 1] <<- modify_depth(language_bank[[speaker2]][[speaker1_says]][t], 1, ~ .x + age_factor)
-  } else {
-    # Add the new language as a named vector in speaker2's language bank
-    language_bank[[speaker2]][[speaker1_says]][t + 1] <<- 1
-  }
-  
-  # If speaker2 does not recognize the language spoken by speaker1,
-  # update all languages in speaker2's language bank (except the one spoken by speaker1)
-  # to maintain their proficiency levels from time t to t+1
-  for (lang in languages) {
-    if (lang != speaker1_says) {
-      language_bank[[speaker2]][[lang]][t + 1] <<- language_bank[[speaker2]][[lang]][t]
+update_language_bank <- function(language_bank, pairing = "random", tmax, speaking = FALSE) {
+  language_list <- list()
+  for (t in seq(tmax)) { # for each new year in model time
+    if (pairing == "random") {
+      pair <- pair_agents_randomly(length(language_bank)) # pick conversational partners
     }
-  }
+    for (pair_row in seq_len(nrow(pair))) {
+      speaker1 <- pair[pair_row, 1]
+      speaker2 <- pair[pair_row, 2]
+      
+      
+      # Identify the languages currently known by each agent
+      speaker1_languages <- names(purrr::keep(language_bank[[speaker1]], function(x) all(x > 0)))
+      speaker2_languages <- names(purrr::keep(language_bank[[speaker2]], function(x) all(x > 0)))
   
-  # If speaker1 recognizes the language spoken by speaker2, then exposure to it improves their proficiency
-  if (speaker2_says %in% speaker1_languages) {
-    # The amount of proficiency gained is a function of the listener's age.
-    age_factor <- 100^(1/(t + 0.5))
-    language_bank[[speaker1]][[speaker2_says]][t + 1] <<- modify_depth(language_bank[[speaker1]][[speaker2_says]][t], 1, ~ .x + age_factor)
-  } else {
-    # Add the new language as a named vector in speaker1's language bank
-    language_bank[[speaker1]][[speaker2_says]][t + 1] <<- 1
-  }
-  
-  # If speaker1 does not recognize the language spoken by speaker2,
-  # update all languages in speaker1's language bank (except the one spoken by speaker2)
-  # to maintain their proficiency levels from time t to t+1
-  for (lang in languages) {
+      # Each speaker picks a language to speak —- sampled at random from each individual's language bank
+      speaker1_says <- sample(speaker1_languages, 1)
+      speaker2_says <- sample(speaker2_languages, 1)
+      
+      # The amount of proficiency gained is a function of the listener's age.
+      age_factor <- 100^(1/(t + 0.5))
+      
+      ### Learning by Listening ###
+      # If speaker2 recognizes the language spoken by speaker1, then exposure to it improves their proficiency
+      if (speaker1_says %in% speaker2_languages) {
+        language_bank[[speaker2]][[speaker1_says]][t + 1] <- modify_depth(language_bank[[speaker2]][[speaker1_says]][t], 1, ~ .x + age_factor)
+      } 
+        else {
+        # Add the new language as a named vector in speaker2's language bank
+        language_bank[[speaker2]][[speaker1_says]][t + 1] <- 1
+      }
+      
+      # If speaker1 recognizes the language spoken by speaker2, then exposure to it improves their proficiency
+      if (speaker2_says %in% speaker1_languages) {
+        language_bank[[speaker1]][[speaker2_says]][t + 1] <- modify_depth(language_bank[[speaker1]][[speaker2_says]][t], 1, ~ .x + age_factor)
+      } 
+       else {
+        # Add the new language as a named vector in speaker1's language bank
+        language_bank[[speaker1]][[speaker2_says]][t + 1] <- 1
+      }
+      
+      if(speaking == FALSE){ #   If speaker1 does not recognize the language spoken by speaker2,
+     # update all languages in speaker1's language bank (except the one spoken by speaker2)
+     # to maintain their proficiency levels from time t to t+1
+         for (lang in languages) {
     if (lang != speaker2_says) {
-      language_bank[[speaker1]][[lang]][t + 1] <<- language_bank[[speaker1]][[lang]][t]
+      language_bank[[speaker1]][[lang]][t + 1] <- language_bank[[speaker1]][[lang]][t]
     }
+           if(lang != speaker1_says){
+               language_bank[[speaker2]][[lang]][t + 1] <- language_bank[[speaker2]][[lang]][t]
+               }
+             }
+           }
+
+ ### Learning by Speaking ###
+      if(speaking == TRUE){
+        language_bank[[speaker1]][[speaker1_says]][t + 1] <- modify_depth(language_bank[[speaker1]][[speaker1_says]][t], 1, ~ .x + age_factor)
+        language_bank[[speaker2]][[speaker2_says]][t + 1] <- modify_depth(language_bank[[speaker2]][[speaker2_says]][t], 1, ~ .x + age_factor)
+        
+     for (lang in languages) {
+    if (lang != speaker2_says & lang != speaker1_says) {
+      language_bank[[speaker1]][[lang]][t + 1] <- language_bank[[speaker1]][[lang]][t]
+            language_bank[[speaker2]][[lang]][t + 1] <- language_bank[[speaker2]][[lang]][t]
+           }
+         }
+     }
   }
+  }
+    return(language_bank)
 }
 
 
 
+### Trial run of model function
+starting_bank <- lapply(agents, assign_languages) # initial language bank, tracking all languages inherited vertically by infants in the cohort of agents
+test <- update_language_bank(starting_bank, tmax = 20) # test run: 20 years of language learning
+
 
 ```
 
-
   
-  Ok, now have this cohort learn language from the social environment of their peers: 
+
+
+#### Design an output table for population-level results: What % of the cohort knows each language at time t?
+The code below that creates a summary table was written by ChatGPT.  
+It runs, but it's not particularly efficient. Something to optimize for future, if desired. 
 ```{r}
 
-# For each year of the simulation
-for(i in seq(tmax)){
-  pairs <- pair_agents_randomly(N) # have agents pick a conversation partner
-  apply(pairs, MARGIN = 1, FUN = update_language_bank, t = i) # and learn from them.
- 
+# Define a function to summarize language bank at each time point: e.g., Number of speakers of language A at time t
+count_speakers <- function(language_bank, 
+                           proficiency_threshold) {
+  # Initialize an empty list to store summaries
+  summary_list <- list()
   
-}
-
-```
-
-  
-  ******* The section below needs work *********
-```{r}
-
-### Design an output table for population-level results: What % of the cohort knows each language at time t?
-
-
-# Create an empty list to store the results
-language_presence <- vector("list", length = tmax)
-
-# Iterate over each time step
-for (t in 1:tmax) {
-  # Initialize counters for each language
-  count_A <- 0
-  count_B <- 0
-  count_C <- 0
-  
-  # Iterate over each individual
-  for (i in seq_along(language_bank)) {
-    # Check if the individual has a value greater than 0 for each language
-    if (language_bank[[i]][["A"]][t] > 0) {
-      count_A <- count_A + 1
+  # Iterate over each time point
+  for (t in seq_along(language_bank[[1]][[1]])) {
+    # Initialize an empty data frame to store summary at current time point
+    summary_df <- data.frame(Time = t)
+    
+    # Iterate over each language
+    languages <- names(language_bank[[1]])
+    for (lang in languages) {
+      # Calculate count of agents with values > chosen proficiency threshold for current language at current time point
+      count <- sum(map_lgl(language_bank, ~ .x[[lang]][t] > proficiency_threshold))
+      
+      # Add count to summary data frame
+      summary_df[[lang]] <- count
     }
-    if (language_bank[[i]][["B"]][t] > 0) {
-      count_B <- count_B + 1
-    }
-    if (language_bank[[i]][["C"]][t] > 0) {
-      count_C <- count_C + 1
-    }
+    
+    # Append summary data frame to the summary list
+    summary_list[[t]] <- summary_df
   }
   
-  # Calculate the percentage of individuals with a value greater than 0 for each language
-  percent_A <- count_A / N * 100
-  percent_B <- count_B / N * 100
-  percent_C <- count_C / N * 100
+  # Combine all summary data frames into a single data frame
+  summary_table <- do.call(rbind, summary_list)
   
-  # Store the results for the current time step
-  language_presence[[t]] <- c(A = percent_A, B = percent_B, C = percent_C)
+  return(summary_table)
 }
 
-# Convert the list to a data frame
-language_presence_df <- do.call(rbind, language_presence)
 
-# Add a column for the time step
-language_presence_df <- as.data.frame(cbind(Time = seq(tmax), language_presence_df))
-names(language_presence_df[,-1]) <- c("A", "B", "C")
+
 ```
-  
-  
+
+
+Function to Plot number of speakers of each language over time: 
+```{r}
+library(wesanderson)
+
+plot_speakers <- function(language_bank, proficiency){
+  tables <- data.frame()
+for(i in seq(proficiency)){
+  summary_table <- count_speakers(language_bank, proficiency_threshold = proficiency[i]) # apply count_speakers function defined above
+  summary_table$proficiency <- paste("proficiency >", proficiency[i], sep = " ")
+  tables <- rbind(tables, summary_table)
+}
+
+speakers_plot <- pivot_longer(tables, cols = c(-"Time", -"proficiency"), names_to = "Language", values_to = "Speakers") %>%
+  ggplot(aes(x = Time, y = Speakers)) +
+  geom_line(aes(color = Language)) + 
+  facet_wrap(~ proficiency) +
+  scale_color_manual(values = wes_palette("Darjeeling1", type = "discrete")) +
+  theme_minimal()
+return(speakers_plot)
+}
+
+```
+
+
+  Run some models with different parameters:
+```{r}
+just_listen <- update_language_bank(starting_bank, pairing = "random", tmax = 79, speaking = FALSE)
+
+proficiency <- c(0, 20, 50, 99)
+plot_speakers(just_listen, proficiency)
+```
+
+```{r}
+
+listen_and_speak <- update_language_bank(starting_bank, pairing = "random", tmax = 79, speaking = TRUE)
+plot_speakers(listen_and_speak, proficiency)
+
+```
   
 
 #### Plotting language biographies
