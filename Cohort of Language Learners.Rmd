@@ -16,60 +16,28 @@ library(purrr)
 
 # Load bespoke functions
 source('./Functions/Pair agents for conversations.R')
-```
-
-
-
-
-```{r}
-# Set Cohort size
-N = 100
-
-# Define the languages vector
-languages <- c("A", "B", "C")
-
-# Set number of years to run simulation
-tmax = 74
+source('./Functions/Inherit languages from parents.R')
 
 ```
+
+
+ *** I bet there's a way to load all the files inside a folder using the source command. How though?
+
 
 
   
 #### Vertical Inheritance 
 Just to get things, started, have every individual in the cohort inherit a language from each of their parents. If both parents pass on the same language, then this individual begins life as a monolingual. If each parent passes on a different language, then this individual begins life as a bilingual. 
 ```{r}
-# Create a pool of languages to populate the parent generation
-trait_pool <- sample(languages, N, replace = TRUE)
-# Generate a random uniform distribution of languages in the parent generation
-mother_tongue = sample(trait_pool, size = N, replace = TRUE)
-father_tongue = sample(trait_pool, N, replace = TRUE)
 
+# Set Cohort size
+agents = 100
 
+# Define the languages vector
+languages <- c("A", "B", "C")
 
-# Create a function to assign inherited languages to each agent
-assign_languages <- function(i) {
-  # Create a language bank for each agent
-  agent_languages <- lapply(languages, function(lang) vector(mode = "list", length = 1))
-  names(agent_languages) <- languages
-  
-  # Inherit languages from parents
-  for (j in seq(agent_languages)) {
-    if (mother_tongue[i] == names(agent_languages[j]) | father_tongue[i] == names(agent_languages[j])) {
-      agent_languages[[j]][1] <- 1
-    }
-    else(agent_languages[[j]][1] <- 0)
-  }
-  
-  return(agent_languages)
-}
-
-
-agents <- 1:N
-names(agents) <- agents
-# Apply the function to each individual
-language_bank <- lapply(agents, assign_languages)
-
-
+# Generate starting values by having each agent inherit one language from each parent (some agents will therefore start out monolingual; some will start out bilingual).
+language_bank <- inherit_languages(agents, languages)
 
 ```
 
@@ -161,7 +129,8 @@ update_language_bank <- function(language_bank, pairing = "random", tmax, speaki
       speaker2_says <- sample(speaker2_languages, 1)
       
       # The amount of proficiency gained is a function of the listener's age.
-      age_factor <- 100^(1/(t + 0.5))
+      params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0) # parameter values chosen by simulating a monolingual cohort that achieves total proficiency in birth language by age 10. 
+      age_factor <- params$r0 * (1 - (1 / (1 + exp(-params$a * (t - params$tc - params$d))))) + 0.5
       
       ### Learning by Listening ###
       # If speaker2 recognizes the language spoken by speaker1, then exposure to it improves their proficiency
@@ -209,14 +178,15 @@ update_language_bank <- function(language_bank, pairing = "random", tmax, speaki
      }
   }
   }
+  language_bank <- modify_depth(.x = language_bank, .depth = -1, .f = \(x) if_else(x > 100, 100, x)) # impose a ceiling on proficiency values at proficiency = 100
     return(language_bank)
 }
 
 
 
 ### Trial run of model function
-starting_bank <- lapply(agents, assign_languages) # initial language bank, tracking all languages inherited vertically by infants in the cohort of agents
-test <- update_language_bank(starting_bank, tmax = 20) # test run: 20 years of language learning
+starting_bank <- inherit_languages(agents, languages) # initial language bank, tracking all languages inherited vertically by infants in the cohort of agents
+test <- update_language_bank(starting_bank, tmax = 70) # test run: 70 years of language learning
 
 
 ```
@@ -279,6 +249,7 @@ for(i in seq(proficiency)){
 
 speakers_plot <- pivot_longer(tables, cols = c(-"Time", -"proficiency"), names_to = "Language", values_to = "Speakers") %>%
   ggplot(aes(x = Time, y = Speakers)) +
+  xlab("Age") +
   geom_line(aes(color = Language)) + 
   facet_wrap(~ proficiency) +
   scale_color_manual(values = wes_palette("Darjeeling1", type = "discrete")) +
@@ -290,10 +261,23 @@ return(speakers_plot)
 
 
   Run some models with different parameters:
+  
+  
+```{r}
+proficiency <- c(0, 20, 50, 99)
+
+p <- plot_speakers(test, proficiency)
+save_plot('./Figures/cohort_models/speakercount_trilingual_random.png', p)
+
+p
+
+```
+  
+  
+  In the monolingual cohort, 20% proficiency is reached at age 2. 
 ```{r}
 just_listen <- update_language_bank(starting_bank, pairing = "random", tmax = 79, speaking = FALSE)
 
-proficiency <- c(0, 20, 50, 99)
 plot_speakers(just_listen, proficiency)
 ```
 
@@ -303,6 +287,8 @@ listen_and_speak <- update_language_bank(starting_bank, pairing = "random", tmax
 plot_speakers(listen_and_speak, proficiency)
 
 ```
+  Honestly, I'm not sure that 'learning by speaking' belongs in this model. Keep it to learning by exposure.
+  
   
 
 #### Plotting language biographies
@@ -311,37 +297,61 @@ plot_speakers(listen_and_speak, proficiency)
 
 #### Reshape the language bank data for plotting
 # Create a data frame to store the language bank information
-
+language_bank <- test
 df <- data.frame()
 for(i in seq(language_bank)){
 language_bio <- as_tibble(language_bank[[i]]) %>%
-  add_column(agent_ID = names(language_bank)[i], .before = "A") %>%
+  mutate(agent_ID = i, .before = "A") %>%
   add_column(age = 1:nrow(.), .before = "A") %>%
-  pivot_longer(cols = c("A", "B", "C"), names_to = "languages", values_to = "proficiency")
+  pivot_longer(cols = languages, names_to = "languages", values_to = "proficiency")
 df <- rbind(df, language_bio)
 }
 df$proficiency <- unlist(df$proficiency)
 
+
+
+plot_bios <- function(language_bank){
+  df <- data.frame()
+  languages <- names(language_bank[[1]])
+for(i in seq(language_bank)){
+language_bio <- as_tibble(language_bank[[i]]) %>%
+  add_column(agent_ID = i, .before = "A") %>%
+  add_column(age = 1:nrow(.), .before = "A") %>%
+  pivot_longer(cols = languages, names_to = "languages", values_to = "proficiency")
+df <- rbind(df, language_bio)
+}
+df$proficiency <- unlist(df$proficiency)
 #### Plot the output!
 
-ggplot(df, aes(x = age, y = proficiency)) +
+p <- ggplot(df, aes(x = age, y = proficiency)) +
   geom_line(aes(color = as.factor(agent_ID))) +
   facet_wrap(~ languages) +
   theme_bw() +
   theme(legend.position = "none")
+return(p)
+}
+
+
+p_bio <- plot_bios(test)
+save_plot('./Figures/cohort_models/language_bios_trilingual_random.png', p_bio)
+p_bio
 ```
   
   This plot shows language proficiency trajectories for each of these three hypothetical languages in a completely randomized environment. Each line is the lifetime language proficiency of a single agent in a single language. Agents may be exposed to 1, 2, or 3 languages over their lifetime.  
   
 
 ```{r}
-df %>%
+bio_samples <- df %>%
   filter(agent_ID %in% 1:25) %>%
 ggplot(aes(x = age, y = proficiency)) +
   geom_line(aes(color = languages)) +
   facet_wrap(~ agent_ID) +
   theme_bw() +
   theme(legend.position = "top")
+
+save_plot('./Figures/cohort_models/sample_language_bios_trilingual_random.png', bio_samples)
+bio_samples
+
 ```
   
   This plot shows a sample of individual language biographies for agents in the cohort. Right now the rate of language learning and its relationship to individual age are not calibrated using any empirical data; it's a fairly arbitrary choice, just to focus on getting the guts of the code to run.  

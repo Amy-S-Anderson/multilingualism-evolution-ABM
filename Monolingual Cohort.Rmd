@@ -1,0 +1,308 @@
+---
+title: "Fine tuning the rate of language learning"
+author: "Amy Anderson"
+date: "2024-05-01"
+output: html_document
+---
+
+ Assume that an agent who inherits a language from their parent and is exposed to the same language every round until age 10 reaches 100% proficiency in that language.
+ 
+
+```{r, message=FALSE}
+
+### Load libraries
+library(tidyverse)
+library(purrr)
+library(cowplot)
+
+
+
+# Load bespoke functions
+source('./Functions/Pair agents for conversations.R')
+source('./Functions/Inherit languages from parents.R')
+
+```
+ 
+ 
+ 
+```{r}
+
+# Set Cohort size
+agents = 100
+
+# Define the languages vector
+languages <- c("A")
+
+# Generate starting language proficiency values for monolingual cohort
+mono_babies <- inherit_languages(agents, languages)
+
+```
+ 
+ 
+ 
+```{r}
+#### Set the rate of language acquisition as an age-dependent function:
+
+language_rate <- function(x, params){
+  params$r0 * (1 - (1 / (1 + exp(-params$a * (x - params$tc - params$d))))) + 0.5
+}
+
+```
+
+
+
+### Parameters for language acquisiton rate function ###
+```{r}
+
+# starting rate at age = 0
+r0 = 5
+r0_sweep <- c(1, 3, 5, 9)
+# steepness of sigmoidal decay rate
+a = c(0.5)
+a_sweep <- c(0.25, 0.5, 0.75, 1)
+# x-axis position of sigmoidal curve's center
+d = 12
+d_sweep <- c(8, 12, 14, 18)
+# starting age of language exposure
+tc = 0
+tc_sweep <- c(0, 2, 4, 8)
+
+acquisition_rates <- data.frame(r0_sweep, a, d, tc) 
+
+
+# calculate language acquisition rates at each age
+ages <- seq(from = 0, to = 50, by = 1)
+
+learning_rates <- tibble(ages)
+for(i in 1:nrow(acquisition_rates)){
+  var[i] <- paste("learning_rate_r0", acquisition_rates$r0[i], sep = "")
+  rates <- sapply(ages, language_rate, params = acquisition_rates[i,])
+  learning_rates <- cbind(learning_rates, rates)
+}
+names(learning_rates) <- c("ages", var)
+
+df <- learning_rates %>%
+  pivot_longer(cols = -"ages", names_to = "r0", values_to = "learning_rate") %>%
+  group_by(r0) %>%
+  mutate(proficiency = cumsum(learning_rate)) %>% # calculated accumulated language proficiency by each age
+  ungroup()
+
+
+
+
+rate_plot <- ggplot(df, aes(x = ages, y = learning_rate)) +
+  geom_line(aes(color = r0)) +
+ # facet_wrap(~ r0, ncol = length(unique(df$r0))) +
+#  scale_y_continuous(limits = c(0, 4.5)) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70)) +
+  theme_bw()
+
+prof_plot <- ggplot(df, aes(x = ages, y = proficiency)) +
+  geom_line(aes(color = r0)) +
+ # facet_wrap(~ r0, ncol = length(unique(df$r0))) +
+  geom_vline(xintercept = 10, linetype = 2) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70)) +
+  theme_bw()
+
+plot_grid(rate_plot, prof_plot, nrow = 2)
+
+```
+  
+  This plot shows the effect of changing the starting value for age-specific rate of language learning on age-specific values for language proficiency. 
+  
+  
+  
+  Test the sensitivity of proficiency to changing the value for a, the steepness of the sigmoidal decay rate:  
+```{r}
+
+acquisition_rates <- data.frame(r0, a_sweep, d, tc) 
+
+learning_rates <- tibble(ages)
+for(i in 1:nrow(acquisition_rates)){
+  var[i] <- paste("learning_rate_a", acquisition_rates$a[i], sep = "")
+  rates <- sapply(ages, language_rate, params = acquisition_rates[i,])
+  learning_rates <- cbind(learning_rates, rates)
+}
+names(learning_rates) <- c("ages", var)
+
+df <- learning_rates %>%
+  pivot_longer(cols = -"ages", names_to = "a", values_to = "learning_rate") %>%
+  group_by(a) %>%
+  mutate(proficiency = cumsum(learning_rate)) %>% # calculated accumulated language proficiency by each age
+  ungroup()
+
+prof_at_10 <- df %>% 
+  filter(ages == 10)
+
+
+rate_plot <- ggplot(df, aes(x = ages, y = learning_rate)) +
+  geom_line(aes(color = a)) +
+#  facet_wrap(~ a, ncol = length(unique(df$a))) +
+#  scale_y_continuous(limits = c(0, 4.5)) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70)) +
+  theme_bw()
+
+prof_plot <- ggplot(df, aes(x = ages, y = proficiency)) +
+  geom_line(aes(color = a)) +
+#  facet_wrap(~ a, ncol = length(unique(df$a))) +
+  geom_vline(xintercept = 10, linetype = 2) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70)) +
+  theme_bw()
+
+plot_grid(rate_plot, prof_plot, nrow = 2)
+```
+  
+  
+  Test the effect of changing d, the x-axis position of the sigmoidal curve's center
+
+```{r}
+
+acquisition_rates <- data.frame(r0, a, d_sweep, tc) 
+
+learning_rates <- tibble(ages)
+for(i in 1:nrow(acquisition_rates)){
+  var[i] <- paste("learning_rate_d", acquisition_rates$d[i], sep = "")
+  rates <- sapply(ages, language_rate, params = acquisition_rates[i,])
+  learning_rates <- cbind(learning_rates, rates)
+}
+names(learning_rates) <- c("ages", var)
+
+df <- learning_rates %>%
+  pivot_longer(cols = -"ages", names_to = "d", values_to = "learning_rate") %>%
+  group_by(d) %>%
+  mutate(proficiency = cumsum(learning_rate)) %>% # calculated accumulated language proficiency by each age
+  ungroup()
+
+prof_at_10 <- df %>% 
+  filter(ages == 10)
+
+
+rate_plot <- ggplot(df, aes(x = ages, y = learning_rate)) +
+  geom_line(aes(color = d)) +
+#  facet_wrap(~ a, ncol = length(unique(df$a))) +
+#  scale_y_continuous(limits = c(0, 4.5)) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70)) +
+  theme_bw()
+
+prof_plot <- ggplot(df, aes(x = ages, y = proficiency)) +
+  geom_line(aes(color = d)) +
+#  facet_wrap(~ a, ncol = length(unique(df$a))) +
+  geom_vline(xintercept = 10, linetype = 2) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70)) +
+  theme_bw()
+
+plot_grid(rate_plot, prof_plot, nrow = 2)
+```
+
+ 
+ 
+ 
+```{r}
+
+```
+ 
+```{r}
+d = 18
+a = 0.5
+r0 = 9
+tc = 0
+
+params <- data.frame(d, a, r0, tc)
+learning_rate <- sapply(ages, language_rate, params = params)
+df <- data.frame(ages, learning_rate) %>%
+  mutate(proficiency = cumsum(learning_rate))
+
+
+rate_plot <- ggplot(df, aes(x = ages, y = learning_rate)) +
+  geom_line() +
+#  facet_wrap(~ a, ncol = length(unique(df$a))) +
+#  scale_y_continuous(limits = c(0, 4.5)) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70)) +
+  theme_bw()
+
+prof_plot <- ggplot(df, aes(x = ages, y = proficiency)) +
+  geom_line(color = "blue") +
+#  facet_wrap(~ a, ncol = length(unique(df$a))) +
+  geom_vline(xintercept = 10, linetype = 2) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70)) +
+  theme_bw()
+
+plot_grid(rate_plot, prof_plot, nrow = 2)
+```
+ 
+ 
+ 
+Check out the proficiency curve for language immersion starting at different ages:
+
+```{r}
+
+acquisition_rates <- data.frame(r0, a, d, tc_sweep) 
+
+learning_rates <- tibble(ages)
+for(i in 1:nrow(acquisition_rates)){
+  var[i] <- paste("age_at_immersion_", acquisition_rates$tc[i], sep = "")
+  rates <- sapply(ages, language_rate, params = acquisition_rates[i,])
+  learning_rates <- cbind(learning_rates, rates)
+}
+names(learning_rates) <- c("ages", var)
+
+df <- learning_rates %>%
+  pivot_longer(cols = -"ages", names_to = "tc", values_to = "learning_rate") %>%
+  group_by(tc) %>%
+  mutate(proficiency = cumsum(learning_rate)) %>% # calculated accumulated language proficiency by each age
+  ungroup()
+
+prof_at_10 <- df %>% 
+  filter(ages == 10)
+
+
+rate_plot <- ggplot(df, aes(x = ages, y = learning_rate)) +
+  geom_line(aes(color = tc)) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70)) +
+  theme_bw()
+
+prof_plot <- ggplot(df, aes(x = ages, y = proficiency)) +
+  geom_line(aes(color = tc)) +
+  geom_vline(xintercept = 10, linetype = 2) +
+  scale_x_continuous(breaks = c(0, 10, 20, 30, 40, 50, 60, 70)) +
+  theme_bw()
+
+plot_grid(rate_plot, prof_plot, nrow = 2)
+```
+
+... I don't think the tc term in the equation is doing what it says it's doing. Not sure it's useful, given the bottom-up approach of this project. 
+
+
+
+test run monolingual language acquisition
+```{r}
+testrun <- update_language_bank(mono_babies, tmax = 50)
+
+
+
+plot_bios <- function(language_bank){
+  df <- data.frame()
+  languages <- names(language_bank[[1]])
+for(i in seq(language_bank)){
+language_bio <- as_tibble(language_bank[[i]]) %>%
+  add_column(agent_ID = i, .before = "A") %>%
+  add_column(age = 1:nrow(.), .before = "A") %>%
+  pivot_longer(cols = languages, names_to = "languages", values_to = "proficiency")
+df <- rbind(df, language_bio)
+}
+df$proficiency <- unlist(df$proficiency)
+#### Plot the output!
+
+p <- ggplot(df, aes(x = age, y = proficiency)) +
+  geom_line(aes(color = as.factor(agent_ID))) +
+  facet_wrap(~ languages) +
+  theme_bw() +
+  theme(legend.position = "none")
+return(p)
+}
+
+
+plot_bios(testrun)
+```
+
+ Ok, there we have it -- these model parameters produce agents who reach 100% monolingual language proficiency at age 12. 
