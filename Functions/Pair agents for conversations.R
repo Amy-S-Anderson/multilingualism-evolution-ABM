@@ -11,3 +11,4 @@ pair_agents_randomly <- function(N) { # N = number of agents
   
   return(pairs)
 }
+

@@ -57,6 +57,9 @@ language_rate <- function(x, params){
   params$r0 * (1 - (1 / (1 + exp(-params$a * (x - params$tc - params$d))))) + 0.5
 }
 
+language_rate2 <- function(x, params){
+  
+}
 
 
 acquisition_rates <- data.frame(r0 = 4.5, # starting rate at age = 0
@@ -193,7 +196,6 @@ test <- update_language_bank(starting_bank, tmax = 70) # test run: 70 years of l
 
   
 
-
 #### Design an output table for population-level results: What % of the cohort knows each language at time t?
 The code below that creates a summary table was written by ChatGPT.  
 It runs, but it's not particularly efficient. Something to optimize for future, if desired. 
@@ -263,7 +265,7 @@ return(speakers_plot)
   Run some models with different parameters:
   
   
-```{r}
+```{r proficiency randomABC}
 proficiency <- c(0, 20, 50, 99)
 
 p <- plot_speakers(test, proficiency)
@@ -293,7 +295,7 @@ plot_speakers(listen_and_speak, proficiency)
 
 #### Plotting language biographies
 
-```{r, echo=FALSE}
+```{r spaghetti proficiency randomABC, echo=FALSE}
 
 #### Reshape the language bank data for plotting
 # Create a data frame to store the language bank information
@@ -340,7 +342,7 @@ p_bio
   This plot shows language proficiency trajectories for each of these three hypothetical languages in a completely randomized environment. Each line is the lifetime language proficiency of a single agent in a single language. Agents may be exposed to 1, 2, or 3 languages over their lifetime.  
   
 
-```{r}
+```{r language biographies plot randomABC}
 bio_samples <- df %>%
   filter(agent_ID %in% 1:25) %>%
 ggplot(aes(x = age, y = proficiency)) +
