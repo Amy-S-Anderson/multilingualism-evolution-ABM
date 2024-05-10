@@ -12,44 +12,60 @@ library(cowplot)
 
 
 
-# Function to generate a random alphanumeric identifier
+### Function to generate a random alphanumeric identifier
+# Initialize a vector to store generated identifiers
+generated_ids <- c()
+
 generate_alphanumeric_id <- function(length) {
   # Define the pool of characters (letters and numbers)
   chars <- c(0:9, letters)
   
-  # Sample characters randomly
-  random_chars <- sample(chars, length, replace = TRUE)
-  
-  # Combine sampled characters into a single string
-  id <- paste0(random_chars, collapse = "")
-  
-  return(id)
+  repeat {
+    # Sample characters randomly
+    random_chars <- sample(chars, length, replace = TRUE)
+    
+    # Combine sampled characters into a single string
+    id <- paste0(random_chars, collapse = "")
+    
+    # Check if the generated ID is unique
+    if (!(id %in% generated_ids)) {
+      # If unique, add it to the vector of generated IDs and return it
+      generated_ids <<- c(generated_ids, id)
+      return(id)
+    }
+  }
 }
 
+# Example usage
+unique_id <- generate_alphanumeric_id(6)  # Generate a unique alphanumeric identifier of length 6
 
+
+role <- c(rep("mother", 100), rep("father", 100), rep("agent", 100))
 # Generate a unique alphanumeric identifier for every parent
-parents <- NULL
-for(i in seq(200)){
-  parents[i] <- generate_alphanumeric_id(3)
+agent_id <- NULL
+for(i in seq(roles)){
+  agent_id[i] <- generate_alphanumeric_id(3)
 }
-# match up parent couples
-couples <- matrix(parents, ncol = 2, byrow = TRUE)
-couples <- as.data.frame(couples)
-colnames(couples) <- c("father", "mother")
-# Generate identifiers for the child generation
-agent <- NULL
-for(i in seq(100)){
-  agent[i] <- generate_alphanumeric_id(3)
-}
+length(unique(agent_id))
+all_IDs <- data.frame(agent_id, role)
+
+length(unique(agents$agent_id))
 
 # create family groups
-families <- cbind(couples, agent) %>% mutate(family = seq(1:length(agent)))
-all_IDs <- families %>% pivot_longer(cols = c("mother", "father", "agent"), values_to = "pid", names_to = "role")
-#all_IDs$age <- if_else(all_IDs$roles == "agents", 0, 25) ### This is now a group of 25-year-olds who have all just become parents to newborns
+all_IDs$family <- rep(c(1:100),3)
+  
+  
+
+families <- all_IDs %>%
+  pivot_wider(id_cols = c("family"), names_from = "role", values_from = "agent_id")
+
+length(unique(all_IDs$agent_id))
+
+
 
 # Designate languages in play. 
 languages <- c("A", "B", "C", "D")
-# languages <- "A"
+
 
 
 # Initialize data list: Each agent is either a 25-year-old monolingual parent, or a newborn.
@@ -89,7 +105,7 @@ establish_population <- function(agents, languages, family_weights){
 # starting population of 200 new monolingual parents and their new singleton births, in a society with four languages spoken. 
 pop <- establish_population(all_IDs, languages)
 
-
+pop2 <- establish_population(all_IDs, languages)
 
 
 
@@ -173,7 +189,7 @@ update_language_bank <- function(pop, families, all_IDs, family_weight = 1, tmax
           relative_exposures[i, 1] <- agent_id
         }
     }
-
+      
     
     # The amount of proficiency gained is a function of the listener's age.
     params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0) # parameter values chosen by simulating a monolingual cohort that achieves total proficiency in birth language by age 10. 
@@ -215,72 +231,59 @@ test_family_weighted <- update_language_bank(pop, families, all_IDs, tmax = 50, 
 ### Every couple of runs, the line above gives me an error code: Error in filtered_mat[, 1] : incorrect number of dimensions. 
 # Why?
 
-test_mono <- update_language_bank(pop, families, all_IDs, tmax = 40, family_weights = 1)
+
+### Check that this code returns expected proficiency values in a monolingual setting: 
+# languages <- "A" 
+# pop <- establish_population(all_IDs, languages)
+# test_mono <- update_language_bank(pop, families, all_IDs, tmax = 40) 
 
 
 
 
 
 
-  
-  
-# Define a function to summarize language bank at each time point: e.g., Number of speakers of language A at time t
-  generate_speaker_summaries <- function(bank, languages, tmax, proficiency_threshold) {
-    language_counts <- matrix(0, nrow = tmax, ncol = length(languages),
-                              dimnames = list(seq(tmax), languages))
-    language_counts <- cbind(time = seq(tmax), language_counts)
-    gen1 <- language_counts
-    gen2 <- language_counts
-    gen1_size <- 0
-    gen2_size <- 0
-    #speaker_counts <- data.frame(matrix(NA, 1, length(languages) + 1))
-    #colnames(speaker_counts) <- c("Time", languages)
-    #data.frame(c(Time = seq(tmax),))
-    
-    for (t in seq(tmax)) {
-      for (i in seq(bank)) {
-        agent_id <- names(bank)[i]
-        if(bank[[agent_id]]$role == "0"){
-          gen2_size <- gen2_size + 1
-        }   
-          else{
-            gen1_size <- gen1_size + 1}
+### Reshape speaker summary tables for plotting
+random <- as_tibble(random_tables$speaker_percents) %>%
+  mutate(model = "random interactions") %>%
+  pivot_longer(cols = languages, names_to = "language", values_to = "percent_of_population_who_speak_language")
+weighted <- as_tibble(weighted_tables$speaker_percents) %>%
+  mutate(model = "family-weighted interactions 400:1") %>%
+  pivot_longer(cols = languages, names_to = "language", values_to = "percent_of_population_who_speak_language")
+speakers_for_plotting <- rbind(random, weighted)
 
-        for (lang in languages) {
-          if (bank[[agent_id]][[lang]][[t]] > proficiency_threshold) {
-            language_counts[t, lang] <- language_counts[t, lang] + 1
-          }
-          if(bank[[agent_id]][[lang]][[t]] > proficiency_threshold & bank[[agent_id]]$role %in% c("mother", "father")){
-            gen1[t, lang] <- gen1[t, lang] + 1
-          }
-          if(bank[[agent_id]][[lang]][[t]] > proficiency_threshold & bank[[agent_id]]$role == "0"){
-            gen2[t, lang] <- gen2[t, lang] + 1
-          }
-        }
-      }
-    }
-    
-    speaker_percents <- language_counts[,2:length(languages)] / length(unique(names(bank))) * 100
-    speaker_percents <- cbind(time = seq(tmax), language_percents)
-    gen1_percents <- gen1[,2:length(languages)] / gen1_size * 100
-    gen1_percents <- cbind(time = seq(tmax), gen1_percents)
-    gen2_percents <- gen2[,2:length(languages)] / gen1_size * 100
-    gen2_percents <- cbind(time = seq(tmax), gen2_percents)
-    
-    tables <- list(speaker_percents, gen1_percents, gen2_percents)
-    names(tables) <- c("speaker_percents", "gen1_percents", "gen2_percents")
-    return(tables)
-  }
+ggplot(speakers_for_plotting, aes(x = time, y = percent_of_population_who_speak_language)) +
+  geom_line(aes(color = language)) +
+  facet_wrap(~ model, ncol = 1) +
+  theme_bw()
 
-# Call the function to generate the language counts table
-random_tables <- generate_speaker_summaries(test_random_interactions, languages, tmax = 20, proficiency_threshold = 20)
-  
-random_tables$language_percents
-random_tables$language_counts
 
-weighted_tables <- generate_speaker_summaries(test_family_weighted, languages, tmax = 20, proficiency_threshold = 20)
-weighted_tables$speaker_percents
-weighted_tables$language_counts
+random <- as_tibble(random_tables$gen1_percents) %>%
+  mutate(model = "random interactions") %>%
+  pivot_longer(cols = languages, names_to = "language", values_to = "percent_of_parent_cohort_who_speak_language")
+weighted <- as_tibble(weighted_tables$gen1_percents) %>%
+  mutate(model = "family-weighted interactions 400:1") %>%
+  pivot_longer(cols = languages, names_to = "language", values_to = "percent_of_parent_cohort_who_speak_language")
+speakers_for_plotting <- rbind(random, weighted)
+
+ggplot(speakers_for_plotting, aes(x = time, y = percent_of_parent_cohort_who_speak_language)) +
+  geom_line(aes(color = language)) +
+  facet_wrap(~ model, ncol = 1) +
+  theme_bw()
+
+
+random <- as_tibble(random_tables$gen2_percents) %>%
+  mutate(model = "random interactions") %>%
+  pivot_longer(cols = languages, names_to = "language", values_to = "percent_of_child_cohort_who_speak_language")
+weighted <- as_tibble(weighted_tables$gen2_percents) %>%
+  mutate(model = "family-weighted interactions 400:1") %>%
+  pivot_longer(cols = languages, names_to = "language", values_to = "percent_of_child_cohort_who_speak_language")
+speakers_for_plotting <- rbind(random, weighted)
+
+ggplot(speakers_for_plotting, aes(x = time, y = percent_of_child_cohort_who_speak_language)) +
+  geom_line(aes(color = language)) +
+  facet_wrap(~ model, ncol = 1) +
+  theme_bw()
+
 
 
 #### Reshape the language bank data for plotting
@@ -292,7 +295,7 @@ generate_long_data <- function(language_bank, languages){
       mutate(agent_ID = names(language_bank)[i], .before = "A",
              role = language_bank[[i]]$role) %>%
       # add_column(age = 1:nrow(.), .before = "A") %>%
-      pivot_longer(cols = languages, names_to = "languages", values_to = "proficiency")
+      pivot_longer(cols = languages, names_to = "language", values_to = "proficiency")
     df <- rbind(df, language_bio)
   }
   df$proficiency <- unlist(df$proficiency)
@@ -302,7 +305,23 @@ generate_long_data <- function(language_bank, languages){
 
 weighted_long <- generate_long_data(test_family_weighted, languages)
 random_long <- generate_long_data(test_random_interactions, languages)
-mono_long <- generate_long_data(test_mono, languages = "A")
+# mono_long <- generate_long_data(test_mono, languages = "A")
+
+wp <- ggplot(weighted_long, aes(x = age, y = proficiency)) +
+  geom_line(aes(color = agent_ID)) +
+  facet_wrap(~ language) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  ggtitle("family-weighted interactions 400:1")
+
+rp <- ggplot(random_long, aes(x = age, y = proficiency)) +
+  geom_line(aes(color = agent_ID)) +
+  facet_wrap(~ language) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  ggtitle("random interactions")
+
+plot_grid(rp, wp, ncol = 1)
 
 
 plot_bio_samples <- function(df, category){
@@ -315,10 +334,15 @@ plot_bio_samples <- function(df, category){
     theme_bw()
 }  
 
+plot_grid(plot_bio_samples(weighted_long, category = "0"),
+          plot_bio_samples(random_long, category = "agent"), ncol = 1)
+
 
 plot_bio_samples(weighted_long, category = "agent")
+plot_bio_samples(random_long, category = "agent")
+
 plot_bio_samples(weighted_long, category = "mother")
-plot_bio_samples(mono_long, category = "agent")
+# lot_bio_samples(mono_long, category = "agent")
 #### Plot the output!
 
 df <- weighted_long
