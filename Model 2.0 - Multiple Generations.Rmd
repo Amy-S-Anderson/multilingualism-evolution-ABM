@@ -1,0 +1,57 @@
+---
+title: "Model 2.0 - Multi-generational Multilingualism"
+author: "Amy Anderson"
+date: "2024-05-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+### Load libraries
+library(tidyverse)
+library(cowplot)
+
+# Load bespoke functions
+function_files <- list.files(path="./Functions/", full.names=TRUE)
+sapply(function_files, FUN=source) # this command tells me that 'object 'generate_agent_id' not found', even though calling that function file directly on its own works just fine. Not sure how to address this error. 
+source('./Functions/Generate Agent IDs.R')
+```
+
+
+
+Generate a starting set of agents, and their age structure:
+```{r}
+agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = 1000), FUN = generate_agent_id))
+
+# uniform age structure
+agent_census$age <- sample(0:80, 1000, replace = TRUE)
+
+# alternate assigning male and female state for each agent. 
+agent_census$female <- rep(c(0,1), nrow(agent_census)/2)
+```
+
+
+Pair up males/females for reproductive partnerships: 
+```{r}
+
+```
+
+
+Assign a family number to each couple.
+...This is going to get messed up after one generation....
+No problem!
+Make each agent's Family ID status a vector that can contain multiple family IDs 
+Family IDs will generate for each new marriage-partnered couple. 
+All agents will need to get married at age 15 then...
+```{r}
+
+```
+
+
+
+
