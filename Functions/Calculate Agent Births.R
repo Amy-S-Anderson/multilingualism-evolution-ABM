@@ -54,14 +54,14 @@ sow <- function(tfr, agent_census){
 
 
 #### Example use ####
-
+# source('./Functions/Generate Agent IDs.R')
 # Generate a set of agents
 agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = 1000), FUN = generate_agent_id))
 
 # uniform age structure
 agent_census$age <- sample(0:80, 1000, replace = TRUE)
 
-# alternate assigning male and female state for each agent. 
+# alternate assigning male and female state for each agent.
 agent_census$female <- rep(c(0,1), nrow(agent_census)/2)
 
 
