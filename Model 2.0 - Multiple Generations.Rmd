@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 
-```{r}
+```{r, message=FALSE, echo=FALSE, include=FALSE}
 ### Load libraries
 library(tidyverse)
 library(cowplot)
@@ -27,14 +27,20 @@ function_files <- list.files(path="./Functions/", full.names=TRUE) # all file na
 function_files <- function_files[which(function_files != "./Functions//Generate Agent IDs.R")] # remove the agent ID function
 function_files <- c(first_function, function_files) # put it back in as the first item in the list of names. 
 
+
 # apply the source() command to all Function file names them to pull the functions into the working environment. 
 sapply(function_files, FUN=source) 
 
 ```
 
 
+ - Designate languages in play. 
+```{r}
+languages <- choose_languages(3)
+```
 
-Generate a starting set of agents, and their age structure:
+
+ - Generate a starting set of agents, and their age structure:
 ```{r}
 agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = 1000), FUN = generate_agent_id))
 
@@ -43,33 +49,51 @@ agent_census$age <- sample(0:80, 1000, replace = TRUE)
 
 # alternate assigning male and female state for each agent. 
 agent_census$female <- rep(c(0,1), nrow(agent_census)/2)
+
+# create empty variable for spouse ID
+agent_census$spouse_id <- NA
+
+# create columns to language proficiency variables
+agent_languages <- as.data.frame(sapply(languages, function(lang) vector(mode = "list", length = nrow(agent_census))))
+names(agent_languages) <- languages
+
+
+agent_census <- cbind(agent_census, agent_languages)
 ```
 
 
 Pair up males/females for reproductive partnerships: 
 ```{r}
 
+test <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_similarity)
+
+
 ```
 
 
-Assign a family number to each couple.
-...This is going to get messed up after one generation....
-No problem!
-Make each agent's Family ID status a vector that can contain multiple family IDs 
-Family IDs will generate for each new marriage-partnered couple. 
-All agents will need to get married at age 15 then...
+Generate new births in existing partnerships. Assign traits to newborn agents. 
 ```{r}
-
+# sow()...
 ```
 
 
-# Designate languages in play. 
+Pick conversation partners for the year.
 ```{r}
-choose_languages <- function(number_of_languages){
-  languages <- chartr("123456789", "ABCDEFGHI", seq(number_of_languages))
-return(languages)
-}
-
-languages <- choose_languages(3)
+# meetup()
 ```
 
+
+Learn languages from each other.
+```{r}
+# converse()
+```
+
+
+Calculate annual deaths.
+```{r}
+reap()
+```
+
+
+
+Repeat all of this living for the next value of time t.
