@@ -22,8 +22,10 @@
 #### Function: Generate Language Names
 
 # number_of_languages = an integer between 1 and 9. 
-choose_languages <- function(number_of_languages){
-  languages <- chartr("123456789", "ABCDEFGHI", seq(number_of_languages)) 
+choose_local_languages <- function(number_of_languages){
+  
+  languages <- paste("Language", chartr("123456789", "ABCDEFGHI", seq(number_of_languages)), sep = " ") 
+  
   return(languages)
 }
 
