@@ -30,7 +30,9 @@ library(tidyverse)
 
 
 sow <- function(tfr, agent_census){
-  fertile_myrtles <- subset(agent_census, female == 1 & age >= 15 & age <= 49)
+  fertile_myrtles <- subset(agent_census, female == 1 & 
+                              age >= 15 & age <= 49 &
+                              !is.na(spouse_id))
   
   # This equation simulates the yearly likelihood of each female individual of reproductive age giving birth in order to generate an average number of births per year that reflects the assigned total fertility rate (TFR), based on the identified years of reproduction and the starting population size.
   # average annual probability of giving birth
@@ -39,7 +41,7 @@ sow <- function(tfr, agent_census){
   fertile_myrtles$baby_time <- if_else(fertile_myrtles$baby_dice < annual_birth_probability, "yes", "no")
   
   new_mothers <- subset(fertile_myrtles, baby_time == "yes") %>%
-    select(agent_id, age)
+    select(agent_id, spouse_id)
   
   return(new_mothers)
 }
@@ -54,19 +56,11 @@ sow <- function(tfr, agent_census){
 
 
 #### Example use ####
-# source('./Functions/Generate Agent IDs.R')
-# Generate a set of agents
-agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = 1000), FUN = generate_agent_id))
 
-# uniform age structure
-agent_census$age <- sample(0:80, 1000, replace = TRUE)
-
-# alternate assigning male and female state for each agent.
-agent_census$female <- rep(c(0,1), nrow(agent_census)/2)
-
+# Need an example data frame that includes matched spouses. 
 
 # total fertility rate: 2 children per woman
-tfr = 2
-test <- sow(tfr, agent_census)
+# tfr = 2
+# test <- sow(tfr, agent_census)
 
 
