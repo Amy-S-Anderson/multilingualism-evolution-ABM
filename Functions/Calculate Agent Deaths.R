@@ -25,18 +25,26 @@ library(tidyverse)
 # mortality_regime = a data frame with values for a Siler function of mortality
 reap <- function(agent_census, mortality_regime){ 
   
+  pop <- agent_census
   calculate_age_based_risk <- function(age){mortality_regime$a1 * exp(-mortality_regime$b1 * age) + # infant mortality
       mortality_regime$a2 + # age-independent mortality 
       mortality_regime$a3 * exp(mortality_regime$b3 * age) # senescent mortality
   }
   
-  agent_census$age_specific_mortality_risk <- sapply(agent_census$age, FUN = calculate_age_based_risk)
+  reaper_math <- data.frame(agent_id = pop$agent_id)
+  reaper_math$age_specific_mortality_risk <- sapply(pop$age, FUN = calculate_age_based_risk)
   
   # Now, draw a random number between 0 and 1. (Pick a card, any card...)
-  agent_census$death_dice <- sample(runif(n = 10000, min = 0, max = 1), size = length(agent_census$agent_id), replace = TRUE)
-  agent_census$time_to_die <- if_else(agent_census$death_dice < agent_census$age_specific_mortality_risk, "yes", "no")
+  reaper_math$death_dice <- sample(runif(n = 10000, min = 0, max = 1), size = length(pop$agent_id), replace = TRUE)
+  reaper_math$time_to_die <- if_else(reaper_math$death_dice < reaper_math$age_specific_mortality_risk, "yes", "no")
   
-  return(agent_census)
+  unlucky_ones <- reaper_math %>%
+    filter(time_to_die == "yes")
+  
+  pop$death_recorded <- case_when(pop$agent_id %in% unlucky_ones$agent_id ~ "yes", 
+            TRUE ~ as.character(pop$death_recorded))
+  
+    return(pop)
 }
 
 
@@ -62,7 +70,7 @@ agent_id <- sapply(seq(from = 0, length.out = 1000), FUN = generate_agent_id)
 # assign a uniform age structure
 age <- sample(0:80, 1000, replace = TRUE)
 
-agents <- data.frame(agent_id, age)
+agents <- data.frame(agent_id, age, death_recorded = NA)
 
 test <- reap(agents, mortality_regime = Tsimane)
 
