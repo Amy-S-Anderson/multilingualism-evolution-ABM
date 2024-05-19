@@ -27,7 +27,6 @@ function_files <- list.files(path="./Functions/", full.names=TRUE) # all file na
 function_files <- function_files[which(function_files != "./Functions//Generate Agent IDs.R")] # remove the agent ID function
 function_files <- c(first_function, function_files) # put it back in as the first item in the list of names. 
 
-
 # apply the source() command to all Function file names them to pull the functions into the working environment. 
 sapply(function_files, FUN=source) 
 
@@ -194,54 +193,75 @@ conversants <- sapply(seq(agent_census$agent_id), record_conversations, interact
 Record which language each agent chooses to speak in each conversation:
 ```{r}
 
-# all_conversant_IDs = a vector of agent IDs returned by the record_conversations() function above. This function operates on the languages spoken in conversation by the conversation partners of a single agent. Use an apply() function to get a record of conversation languages for all agents. 
-# agent_census = data frame of agent traits. Defaults to the data frame created by other model functions that should be called before this one. 
-# languages = vector of language names. Defaults to the vector created by the choose_local_languages() function that should be called in the model setup. 
-select_language_of_conversation <- function(all_conversant_IDs, agent_census = agent_census, languages = languages){
+# agent_conversation_partners = a vector of agent IDs returned by the record_conversations() function above. This function operates on the languages spoken in conversation by the conversation partners of a single agent. Use an apply() function to get a record of conversation languages for all agents. 
+# pop = data frame of agent traits. Defaults to the agent_census data frame created by other model functions that should be called before this one. 
+select_language_of_conversation <- function(agent_conversation_partners, pop = agent_census){
   
-  
-
-  conversant = "id_8"
-         
-  
-  test <- sapply()
+    spoken <- NA
     
-for(speech in all_conversant_IDs){
-        
+    
+for(speaker in seq(agent_conversation_partners)){
+  
         # Identify the languages currently known by each agent who has spoken to agent i.
         ### Proficiency threshold for speech is set at 20 because this is the proficiency value achieved by a two-year-old in a monolingual exposure.
-      spoken <- NA
-      
       speaker_languages <- agent_census %>%
             select(agent_id, contains("Language")) %>%
-            filter(agent_id == conversant) %>%
+            filter(agent_id == agent_conversation_partners[speaker]) %>%
             select(-agent_id) %>%
             pivot_longer(cols = languages, names_to = "can_speak", values_to = "proficiency") %>%
             filter(proficiency > 20)
       speaker_languages <- speaker_languages$can_speak
       
         # Each speaker picks a language to speak —- sampled at random from each individual's language bank.
-        spoken[speech] <- if(length(speaker_languages > 0)){
+        speaker_says <- if(length(speaker_languages > 0)){
           sample(speaker_languages, 1) 
         } else(NA)
-        spoken <- spoken[which(!is.na(spoken))]
+        spoken[speaker] <- speaker_says
+}
         
-        # count the number of times agent i experienced being spoken to in each language.
-        exposure_count <- NA
-        for(lang in seq(languages)){
-          exposure_count[lang] <- length(spoken[which(spoken == languages[lang])])
-        }
-        language_exposure[i,] <- c(agent_id, exposure_count)
-        relative_exposures[i, -1] <- exposure_count / max(exposure_count)
-        relative_exposures[i, 1] <- agent_id
+    spoken <- na.omit(spoken) # remove NAs (conversation partner was an infant who can't speak yet)
+    
+    return(spoken)
       }
-    }
+    
+
+languages_of_conversation <- sapply(conversants, FUN = select_language_of_conversation)
+
+
+
 ```
 
 
-Record each agent's relative frequency of exposure to each language:
+Record each agent's relative frequency of exposure to each language in this year of conversations:
 ```{r}
 
+# Again, this function is designed to run on a vector of conversations experienced by a single agent. To return values for all agents, use an apply function.
+# conversation_languages_vector = a vector of language names, indicating the language spoken in each conversation that this agent experienced in this round of model time t.
+# pop = a data frame of agent traits. Defaults to the agent_census data frame created by other model functions that should be called before this one. 
+calculate_language_exposures <- function(conversation_languages_vector, pop = agent_census){
+  
+  languages <- agent_census %>%
+    select(starts_with("Language")) %>%
+    names()
+  
+  # count the number of times this agent experienced being spoken to in each language.
+        exposure_count <- NA
+        relative_exposures <- NA
+        
+        for(lang in seq(languages)){
+          exposure_count[lang] <- length(spoken[which(spoken == languages[lang])])
+        }
+        
+        relative_exposures <- exposure_count / max(exposure_count)
+        return(relative_exposures)
+}
+
+
+
+relative_exposures <- lapply(languages_of_conversation, FUN = calculate_language_exposures)
+agent_language_exposures <- cbind(agent_census$agent_id, as.data.frame(matrix(unlist(relative_exposures), ncol = 3)))
+names(agent_language_exposures) <- c("agent_id", languages)
+                                  
 ```
 
 
@@ -250,6 +270,70 @@ Increase each agent's language proficiency in the population languages as a func
 2. their age at time of exposure t.
 ```{r}
 
+
+learn_languages <- function(agent_language_exposures, pop = agent_census){
+
+   # function for effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
+  age_factor <- function(age){
+  params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
+  params$r0 * (1 - (1 / (1 + exp(-params$a * (age - params$tc - params$d))))) + 0.5
+  }
+
+  age = sort(unique(agent_census$age))
+  age_rate = sapply(age, FUN = age_factor)
+  proficiency_by_age <- data.frame(age,
+                                 age_rate,
+                                 proficiency = if_else(cumsum(age_rate) <= 100, cumsum(age_rate), 100))
+  
+  #### I think I can use case_when inside a for loop that loops across the language columns of agent_census. 
+  case_when
+  # for each agent
+  for(i in 1:nrow(agent_census)){
+   language <- sample(languages, size = 1, replace = TRUE) # assign them a language at random
+   # ^ The starting frequency of languages will be a changing variable in future model versions. 
+   agent_census[i,language] <-proficiency_by_age[which(proficiency_by_age$age == agent_census[i,]$age),]$proficiency
+  }
+
+return(agent_census)
+}
+
+
+agent_census <- assign_starting_proficiency(agent_census)
+
+
+
+
+
+
+  #### separate the agent state and the output ####
+    
+    # The amount of proficiency gained is a function of the listener's age.
+    params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0) # parameter values chosen by simulating a monolingual cohort that achieves total proficiency in birth language by age 10. 
+    
+    
+    ### Learning by Listening ###
+    for(i in seq(pop)){
+      agent_id <- names(pop)[i]
+      age_factor <- params$r0 * (1 - (1 / (1 + exp(-params$a * (pop[[agent_id]]$age[t] - params$tc - params$d))))) + 0.5
+      
+      for(lang in seq(languages)){
+        if(pop[[agent_id]][[lang]][t] < 100){
+          pop[[agent_id]][[lang]][t + 1] <- modify_depth(pop[[agent_id]][[lang]][t], 1, ~ .x + (age_factor * relative_exposures[i, lang + 1]))
+        }else(pop[[agent_id]][[lang]][t + 1] <- 100)
+        if(pop[[agent_id]][[lang]][t + 1] > 100){
+          pop[[agent_id]][[lang]][t + 1] <- 100
+        }
+        
+        # Update language speaker counts for this time step
+        if (pop[[agent_id]][[lang]][t] > 0) {
+          language_counts[t, lang] <- language_counts[t, lang] + 1
+        }
+      }
+      
+      
+      pop[[agent_id]]$age[t + 1] <- pop[[agent_id]]$age[t] + 1
+    }
+  }
 ```
 
 

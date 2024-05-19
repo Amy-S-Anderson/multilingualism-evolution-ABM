@@ -39,5 +39,5 @@ choose_local_languages <- function(number_of_languages){
 #### Example use ####
 
 # Generate names for 3 abstract languages
-languages <- choose_languages(3)
+languages <- choose_local_languages(3)
 
