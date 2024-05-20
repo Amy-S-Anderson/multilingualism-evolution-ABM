@@ -22,13 +22,10 @@ library(tidyverse)
 
 
 
-#### Function: Calculate agent deaths at time t. 
+#### Function: Calculate which agents become new mothers ####
 
-# agent_census = a data frame with a column for agent ID and a column for agent age.
-# mortality_regime = a data frame with values for a Siler function of mortality
-
-
-
+# agent_census = a data frame with columns for agent ID, age, sex, and spouse ID.  
+# tfr = total fertility rate, the average number of total births per woman.
 sow <- function(tfr, agent_census){
   fertile_myrtles <- subset(agent_census, female == 1 & 
                               age >= 15 & age <= 49 &
@@ -48,6 +45,32 @@ sow <- function(tfr, agent_census){
 
 
 
+
+
+#### Function: Generate agent_census entries for agents born to new mothers ####
+
+
+# new_mothers = the output of the sow() function above. 
+birth_new_agents <- function(agent_census, new_mothers){
+  
+  # Create a data frame with a single row of NA values
+  newborns <- data.frame(matrix(0, nrow = nrow(new_mothers), ncol = ncol(agent_census)))
+  # Set the column names to match those of agent_census
+  colnames(newborns) <- colnames(agent_census)
+  
+  newborns$agent_id <- sapply(seq(from = max(as.numeric(substr(agent_census$agent_id, 4, nchar(agent_census$agent_id)))),
+                                  length.out = nrow(new_mothers)), 
+                              generate_agent_id)
+  newborns$age <- 0
+  newborns$female <- sample(c(0,1), size = nrow(new_mothers), replace = T)
+  newborns$spouse_id <- NA
+  newborns$mother_id <- new_mothers$agent_id
+  newborns$father_id <- new_mothers$spouse_id
+  newborns$death_recorded <- NA
+  
+  agent_census <- rbind(agent_census, newborns)
+  return(agent_census)
+}
 
 
 ########################################################################################
