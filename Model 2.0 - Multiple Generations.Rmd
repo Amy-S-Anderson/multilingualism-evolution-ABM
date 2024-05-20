@@ -23,9 +23,10 @@ library(cowplot)
 ## create character vector of all file names inside the 'Functions' folder
 # specify function to generate agent IDs first -- this function is called in the 'Example Use' section of some other function files, and that will cause issues if it isn't loaded into the workspace before the files that use it.
 first_function <- "./Functions//Generate Agent IDs.R"
+generate_starting_pop <- "./Functions//Generate Time0 Agents.R"
 function_files <- list.files(path="./Functions/", full.names=TRUE) # all file names in Function folder
-function_files <- function_files[which(function_files != "./Functions//Generate Agent IDs.R")] # remove the agent ID function
-function_files <- c(first_function, function_files) # put it back in as the first item in the list of names. 
+function_files <- function_files[which(function_files != "./Functions//Generate Agent IDs.R" & function_files != "./Functions//Generate Time0 Agents.R")] # remove the agent ID function
+function_files <- c(first_function, function_files, generate_starting_pop) # put it back in as the first item in the list of names. 
 
 # apply the source() command to all Function file names them to pull the functions into the working environment. 
 sapply(function_files, FUN=source) 
@@ -41,72 +42,20 @@ languages <- choose_local_languages(3)
 
  - Generate a starting set of agents, and their age structure:
 ```{r}
+# This starting population is 1,000 agents with a 1:1 sex ratio and a uniform distribution of ages between 0 and 80.
+agent_census <- make_uniform_population(n = 1000, max_age = 80)
 
-agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = 1000), FUN = generate_agent_id))
-
-# uniform age structure
-agent_census$age <- sample(0:80, 1000, replace = TRUE)
-
-# alternate assigning male and female state for each agent. 
-agent_census$female <- rep(c(0,1), nrow(agent_census)/2)
-agent_census$death_recorded <- NA
-
-# create empty variable for spouse ID
-agent_census$spouse_id <- NA
-agent_census$mother_id <- NA
-agent_census$father_id <- NA
-
-# create columns to language proficiency variables
-agent_languages <- as.data.frame(matrix(0, nrow = nrow(agent_census), ncol = length(languages)))
-names(agent_languages) <- languages
-
-
-agent_census <- cbind(agent_census, agent_languages)
 ```
 
 
-
-Assign initial languages proficiencies for agents at Time 0:
+ - Assign initial languages proficiencies for agents at Time 0:
 ```{r}
-
-assign_starting_proficiency <- function(agent_census){
-
-   # function for effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
-  age_factor <- function(age){
-  params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
-  params$r0 * (1 - (1 / (1 + exp(-params$a * (age - params$tc - params$d))))) + 0.5
-  }
-
-  age = sort(unique(agent_census$age))
-  age_rate = sapply(age, FUN = age_factor)
-  proficiency_by_age <- data.frame(age,
-                                 age_rate,
-                                 proficiency = if_else(cumsum(age_rate) <= 100, cumsum(age_rate), 100))
-  languages <- agent_census %>%
-    select(starts_with("Language")) %>%
-    names()
-  
-  # for each agent
-  for(i in 1:nrow(agent_census)){
-   language <- sample(languages, size = 1, replace = TRUE) # assign them a language at random
-   # ^ The starting frequency of languages will be a changing variable in future model versions. 
-   agent_census[i,language] <-proficiency_by_age[which(proficiency_by_age$age == agent_census[i,]$age),]$proficiency
-  }
-
-return(agent_census)
-}
-
-
+# This function assumes an equal number of monolingual speakers for each local language.
 agent_census <- assign_starting_proficiency(agent_census)
 ```
-** think about function organization -- where do you want to put this function?
- - An 'initiate model population' script?
- - in the 'Choose languages' script?
 
 
-
-
-Pair up males/females for reproductive partnerships: 
+ - Pair up males/females for reproductive partnerships: 
 ```{r}
 
 agent_census <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_similarity)
@@ -115,152 +64,43 @@ agent_census <- select_marriage_partners(agent_census, calculate_dyad_score = ca
 ```
 
 
-Generate new births in existing partnerships. Assign traits to newborn agents. 
+ - Generate new births in existing partnerships. Assign traits to newborn agents. 
 ```{r}
-agent_census <- agent_census[1:1000,]
 
 new_mothers <- sow(tfr = 2, agent_census)
 
-
-birth_new_agents <- function(agent_census, new_mothers){
-
-# Create a data frame with a single row of NA values
-  newborns <- data.frame(matrix(0, nrow = nrow(new_mothers), ncol = ncol(agent_census)))
-  # Set the column names to match those of agent_census
-  colnames(newborns) <- colnames(agent_census)
-
-  newborns$agent_id <- sapply(seq(from = max(as.numeric(substr(agent_census$agent_id, 4, nchar(agent_census$agent_id)))),
-                                    length.out = nrow(new_mothers)), 
-                                generate_agent_id)
-    newborns$age <- 0
-    newborns$female <- sample(c(0,1), size = nrow(new_mothers), replace = T)
-    newborns$spouse_id <- NA
-    newborns$mother_id <- new_mothers$agent_id
-    newborns$father_id <- new_mothers$spouse_id
-    newborns$death_recorded <- NA
-    
-agent_census <- rbind(agent_census, newborns)
-return(agent_census)
-}
-
-
 agent_census <- birth_new_agents(agent_census, new_mothers)
-
-
-# Generate mother_id and father_id columns for agent_census
 
 ```
 
 
-Pick conversation partners for the year.
+ - Pick conversation partners for the year.
 ```{r}
 
+# This function assigns partners by sampling at random, with replacement. Each agent will experience a minimum of 10 conversations. 
 interactions <- select_conversation_partners(agent_census)
 ```
 
 
-Now that the interaction matrix for this round is generated, need to count up the actual interactions each agent has had. 
+ - Now that the interaction matrix for this round is generated, Count up the number of interactions each agent has had. 
 ```{r}
- 
-# This function returns a vector of conversant IDs for each conversation that an agent experienced in this round of model time. It operates for a single agent, and must be used inside an apply() call to return values for all agents
-# agent_id = an index number that corresponds to an entry in agent_census$agent_id
-# interactions = matrix of agent IDs generated by the select_conversation_partners() command that must be run before count_conversations()
-
-record_conversations <- function(agent_id, interactions = interactions){
-      agent_id <- interactions[agent_id, 1]
-      # subset interaction matrix: only the rows that contain agent i. 
-      filtered_mat <- as.matrix(interactions[apply(interactions, 1, function(row) any(row == agent_id)), ]) # need to force this output into matrix form because it defaults to being a character vector if the ego agent isn't sampled in any of the alter rows, and then the next line throws an error when it's asked to subset a matrix (incorrect number of dimensions).
-      
-      # Extract all alter agent IDs from the rows where the agent's ID appears in the first column (agent i's ego row)
-      interactions_from_ego_rows <- filtered_mat[filtered_mat[, 1] == agent_id, -1]
-      
-      # Extract all agent IDs from the first column, excluding the agent's own ID (agent i's appearance as an alter in other agents' ego rows)
-      interactions_from_alter_rows <- filtered_mat[filtered_mat[ ,1]!= agent_id, 1] ### agent ID row is NOT ALWAYS ONE
-      
-      # Combine the two sets of interacted agents
-      all_conversant_IDs <- c(interactions_from_ego_rows, interactions_from_alter_rows)
-      
-      return(all_conversant_IDs)
-}
-      
-      
-      
-      
-      
 
 conversants <- sapply(seq(agent_census$agent_id), record_conversations, interactions)
 ```
 
 
 
-Record which language each agent chooses to speak in each conversation:
+ - Record which language each agent chooses to speak in each conversation:
 ```{r}
 
-# agent_conversation_partners = a vector of agent IDs returned by the record_conversations() function above. This function operates on the languages spoken in conversation by the conversation partners of a single agent. Use an apply() function to get a record of conversation languages for all agents. 
-# pop = data frame of agent traits. Defaults to the agent_census data frame created by other model functions that should be called before this one. 
-
-select_language_of_conversation <- function(agent_conversation_partners, pop = agent_census){
-  
-    # Extract the relevant columns once
-    language_data <- pop %>%
-        select(agent_id, contains("Language"))
-    
-    spoken <- vector("character", length(agent_conversation_partners))
-    
-    for(speaker in seq_along(agent_conversation_partners)){
-        speaker_id <- agent_conversation_partners[speaker]
-        
-        # Filter the speaker's languages and their proficiency levels
-        speaker_languages <- language_data %>%
-            filter(agent_id == speaker_id) %>%
-            select(-agent_id) %>%
-            pivot_longer(cols = starts_with("Language"), names_to = "can_speak", values_to = "proficiency") %>%
-            filter(proficiency > 20) %>%
-            pull(can_speak)
-        
-        # Each speaker picks a language to speak
-        spoken[speaker] <- if(length(speaker_languages) > 0){
-          sample(speaker_languages, 1)
-        } else {
-          NA
-        }
-    }
-    
-    spoken <- spoken[!is.na(spoken)]  # remove NAs (conversation partner was an infant who can't speak yet)
-    return(spoken)
-}
-
 # Calculate a list of conversation languages heard by each agent
-languages_of_conversation lapply(conversants, select_language_of_conversation)
+languages_of_conversation <- lapply(conversants, select_language_of_conversation)
 
 ```
 
 
-Record each agent's relative frequency of exposure to each language in this year of conversations:
+ - Record each agent's relative frequency of exposure to each language in this year of conversations:
 ```{r}
-
-# Again, this function is designed to run on a vector of conversations experienced by a single agent. To return values for all agents, use an apply function.
-# conversation_languages_vector = a vector of language names, indicating the language spoken in each conversation that this agent experienced in this round of model time t.
-# pop = a data frame of agent traits. Defaults to the agent_census data frame created by other model functions that should be called before this one. 
-calculate_language_exposures <- function(conversation_languages_vector, pop = agent_census){
-  
-  languages <- agent_census %>%
-    select(starts_with("Language")) %>%
-    names()
-  
-  # count the number of times this agent experienced being spoken to in each language.
-        exposure_count <- NA
-        relative_exposures <- NA
-        
-        for(lang in seq(languages)){
-          exposure_count[lang] <- length(conversation_languages_vector[which(conversation_languages_vector == languages[lang])])
-        }
-        
-        relative_exposures <- exposure_count / max(exposure_count)
-        return(relative_exposures)
-}
-
-
 
 relative_exposures <- lapply(languages_of_conversation, FUN = calculate_language_exposures)
 agent_language_exposures <- as.data.frame(matrix(unlist(relative_exposures), ncol = 3))
@@ -268,64 +108,20 @@ names(agent_language_exposures) <- languages
                                   
 ```
 
+
 ### *Learn Languages!*
-Increase each agent's language proficiency in the population languages as a function of:
-1. their exposure to the language
-2. their age at time of exposure t.
+ - Increase each agent's language proficiency in the population languages as a function of:
+   1. their exposure to the language
+   2. their age at time of exposure t.
 ```{r}
-
-pop <- agent_census
-learn_languages <- function(agent_language_exposures, pop = agent_census){
-
-   # function for effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
-  age_factor <- function(age){
-  params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
-  params$r0 * (1 - (1 / (1 + exp(-params$a * (age - params$tc - params$d))))) + 0.5
-  }
-
-  
-  age = seq(from = 0, to = 90)
-  age_rate = sapply(age, FUN = age_factor)
-  
-  languages <- pop %>%
-    select(starts_with("Language")) %>%
-    names()
-  
-   for(i in seq_len(nrow(pop[1:10]))){
-    for(lang in languages){
-    pop[i, lang] <- pop[i, lang] + # current language proficiency
-      (age_rate[pop[i, "age"] + 1] * agent_language_exposures[i, lang]) # newly gained language proficiency
-    
-    if (pop[i, lang] > 100) {
-        pop[i, lang] <- 100 # set a proficiency ceiling at 100
-      }
-    }
-  }
-  
-return(pop)
-}
-
 
 agent_census <- learn_languages(agent_language_exposures, pop = agent_census)
 
-# agent_census2 <- learn_languages(agent_language_exposures, pop = agent_census)
-# agent_census2$age <- agent_census$age + 1
-
-
-# 
-# tmp <- rbind(agent_census, agent_census2) %>%
-#   select(agent_id, age, starts_with("Lang")) %>% 
-#   pivot_longer(cols = c("Language A", "Language B", "Language C"), names_to = "Language", values_to = "Proficiency")
-# 
-# tmp2 <- tmp %>% filter(agent_id %in% c("id_1", "id_2", "id_3", "id_4"))
-# ggplot(tmp2, aes(x = age, y = Proficiency)) +
-#   geom_line(aes(color = Language)) +
-#   facet_wrap(~ agent_id)
 ```
 
 
 
-Calculate annual deaths.
+ - Calculate annual deaths.
 ```{r}
 # Mortality Regime parameters for Siler model. Based on parameter values for Tsimane horticulturalists from Gurven and Kaplan 2007.
 Tsimane <- data.frame(a1= 0.221,
@@ -333,17 +129,15 @@ Tsimane <- data.frame(a1= 0.221,
                       a2= 0.009,
                       a3= 0.000023,
                       b3= 0.119)
-test <- reap(agent_census, mortality_regime = Tsimane)
+agent_census <- reap(agent_census, mortality_regime = Tsimane)
 
 ```
 
 
-People who survived this round turn 1 year older
+ - People who survived this round turn 1 year older
 ```{r}
-if(agent_census$death_recorded != "yes"){
-  agent_census$age <- agent_census$age + 1
-}
 
+agent_census$age[is.na(agent_census$death_recorded)] <- agent_census$age[is.na(agent_census$death_recorded)] + 1
 ```
 
 
