@@ -43,6 +43,7 @@ make_uniform_population <- function(n, max_age){
   agent_census$mother_id <- NA
   agent_census$father_id <- NA
   agent_census$death_recorded <- NA
+  agent_census$year <- NA
   
   # create columns to language proficiency variables
   agent_languages <- as.data.frame(matrix(0, nrow = nrow(agent_census), ncol = length(languages)))

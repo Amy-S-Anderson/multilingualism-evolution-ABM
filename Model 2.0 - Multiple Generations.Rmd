@@ -39,89 +39,7 @@ sapply(function_files, FUN=source)
 languages <- choose_local_languages(3)
 ```
 
-
- - Generate a starting set of agents, and their age structure:
-```{r}
-# This starting population is 1,000 agents with a 1:1 sex ratio and a uniform distribution of ages between 0 and 80.
-agent_census <- make_uniform_population(n = 1000, max_age = 80)
-
-```
-
-
- - Assign initial languages proficiencies for agents at Time 0:
-```{r}
-# This function assumes an equal number of monolingual speakers for each local language.
-agent_census <- assign_starting_proficiency(agent_census)
-```
-
-
- - Pair up males/females for reproductive partnerships: 
-```{r}
-
-agent_census <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_similarity)
-
-
-```
-
-
- - Generate new births in existing partnerships. Assign traits to newborn agents. 
-```{r}
-
-new_mothers <- sow(tfr = 2, agent_census)
-
-agent_census <- birth_new_agents(agent_census, new_mothers)
-
-```
-
-
- - Pick conversation partners for the year.
-```{r}
-
-# This function assigns partners by sampling at random, with replacement. Each agent will experience a minimum of 10 conversations. 
-interactions <- select_conversation_partners(agent_census)
-```
-
-
- - Now that the interaction matrix for this round is generated, Count up the number of interactions each agent has had. 
-```{r}
-
-conversants <- sapply(seq(agent_census$agent_id), record_conversations, interactions)
-```
-
-
-
- - Record which language each agent chooses to speak in each conversation:
-```{r}
-
-# Calculate a list of conversation languages heard by each agent
-languages_of_conversation <- lapply(conversants, select_language_of_conversation)
-
-```
-
-
- - Record each agent's relative frequency of exposure to each language in this year of conversations:
-```{r}
-
-relative_exposures <- lapply(languages_of_conversation, FUN = calculate_language_exposures)
-agent_language_exposures <- as.data.frame(matrix(unlist(relative_exposures), ncol = 3))
-names(agent_language_exposures) <- languages
-                                  
-```
-
-
-### *Learn Languages!*
- - Increase each agent's language proficiency in the population languages as a function of:
-   1. their exposure to the language
-   2. their age at time of exposure t.
-```{r}
-
-agent_census <- learn_languages(agent_language_exposures, pop = agent_census)
-
-```
-
-
-
- - Calculate annual deaths.
+- Decide parameter values for population mortality hazard.
 ```{r}
 # Mortality Regime parameters for Siler model. Based on parameter values for Tsimane horticulturalists from Gurven and Kaplan 2007.
 Tsimane <- data.frame(a1= 0.221,
@@ -129,17 +47,138 @@ Tsimane <- data.frame(a1= 0.221,
                       a2= 0.009,
                       a3= 0.000023,
                       b3= 0.119)
+```
+
+
+ - Generate a starting set of agents, and their age structure:
+```{r}
+# This starting population is 1,000 agents with a 1:1 sex ratio and a uniform distribution of ages between 0 and 80.
+agent_census <- make_uniform_population(n = 1000, max_age = 80)
+
+ # - Assign initial languages proficiencies for agents at Time 0:
+# This function assumes an equal number of monolingual speakers for each local language.
+agent_census <- assign_starting_proficiency(agent_census)
+
+```
+
+Initialize output table
+```{r}
+output <- as.data.frame(matrix(0, nrow = 0, ncol = ncol(agent_census)))
+names(output) <- names(agent_census)
+```
+
+Set years of model run time.
+```{r}
+tmax = 20
+```
+
+```{r}
+for(i in seq(tmax)){
+   if(is.na(agent_census$death_recorded)){
+#  Pair up males/females for reproductive partnerships:
+agent_census <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_similarity)
+
+# - Generate new births in existing partnerships. Assign traits to newborn agents. 
+new_mothers <- sow(tfr = 6, agent_census)
+agent_census <- birth_new_agents(agent_census, new_mothers)
+
+# - Pick conversation partners for the year.
+# This function assigns partners by sampling at random, with replacement. Each agent will experience a minimum of 10 conversations. 
+interactions <- select_conversation_partners(agent_census)
+
+# - Now that the interaction matrix for this round is generated, Count up the number of interactions each agent has had. 
+conversants <- sapply(seq(agent_census$agent_id), record_conversations, interactions)
+
+# -  Record which language each agent chooses to speak in each conversation:
+# Calculate a list of conversation languages heard by each agent
+languages_of_conversation <- lapply(conversants, select_language_of_conversation)
+
+ # - Record each agent's relative frequency of exposure to each language in this year of conversations:
+relative_exposures <- lapply(languages_of_conversation, FUN = calculate_language_exposures)
+agent_language_exposures <- as.data.frame(matrix(unlist(relative_exposures), ncol = 3))
+names(agent_language_exposures) <- languages
+
+### *Learn Languages!*
+# - Increase each agent's language proficiency in the population languages as a function of:
+#   1. their exposure to the language
+#   2. their age at time of exposure t.
+agent_census <- learn_languages(agent_language_exposures, pop = agent_census)
+
+# - Calculate annual deaths.
 agent_census <- reap(agent_census, mortality_regime = Tsimane)
 
-```
-
-
- - People who survived this round turn 1 year older
-```{r}
-
+#- People who survived this round turn 1 year older
 agent_census$age[is.na(agent_census$death_recorded)] <- agent_census$age[is.na(agent_census$death_recorded)] + 1
+
+# record the year
+agent_census$year <- i
+ }
+# add the census for this year to the running total of data output
+output <- rbind(output, agent_census)
+# Repeat all of this living for the next value of time t.
+
+}
 ```
 
 
+Count population size in each year of model time:
+```{r}
+pop_size_table <- output %>%
+   group_by(year) %>%
+   summarise(pop_count = n())
+```
 
-Repeat all of this living for the next value of time t.
+Count number of speakers of each language in each year of model time:
+```{r}
+speaker_count_table <- output %>%
+   group_by(year) %>%
+   summarise(SpeakersA = round((sum(`Language A` > 20) / n() * 100), 2),
+             SpeakersB = round((sum(`Language B` > 20) / n() * 100), 2),
+             SpeakersC = round((sum(`Language B` > 20) / n() * 100), 2))
+
+
+ten_yrold_speakers_table <- output %>%
+   group_by(year) %>%
+   filter(age == 10) %>%
+   summarise(SpeakersA = round((sum(`Language A` > 20) / n() * 100), 2),
+             SpeakersB = round((sum(`Language B` > 20) / n() * 100), 2),
+             SpeakersC = round((sum(`Language B` > 20) / n() * 100), 2))
+```
+
+Plot proficiency trajectories across the timeframe of the model:
+```{r}
+# make data long data for plotting.
+longdata <- output %>%
+   pivot_longer(cols = languages, names_to = "Language", values_to = "Proficiency")
+
+
+plot_proficiency_trajectories <- function(longdata){
+subset <- round(seq(from = 1, to = max(longdata$year), by = (max(longdata$year) / 4)))
+
+ggplot(longdata[which(longdata$year %in% subset),], aes(x = age, y = Proficiency)) +
+   geom_line(aes(group = agent_id, color = as.factor(year)), alpha = 0.25) +
+   facet_wrap(~Language) +
+   theme_bw()
+}
+
+plot_proficiency_trajectories(longdata)
+```
+Plot a sample of agent language biographies:
+```{r}
+plot_bio_samples <- function(longdata){
+   sub.num <- round(seq(from = 1, to = length(unique(longdata$agent_id)), by = (length(unique(longdata$agent_id)) / 12)))
+   sub <- paste("id_", sub.num, sep = "")
+   
+   plotdata <- longdata[which(longdata$agent_id %in% sub),] %>%
+      mutate(agent_id = factor(agent_id, levels = sub))
+
+   ggplot(plotdata, aes(x = age, y = Proficiency)) +
+    geom_line(aes(color = Language)) +
+    facet_wrap(~ agent_id) +
+    theme_bw()
+}  
+
+
+plot_bio_samples(longdata)
+```
+You probably want to add some constraints into this plotting function so that it only plots individuals who lived more than x years, so that you don't end up with strange fragmentary language bios. 
