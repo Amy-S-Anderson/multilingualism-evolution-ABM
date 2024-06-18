@@ -29,7 +29,8 @@ library(tidyverse)
 sow <- function(tfr, agent_census){
   fertile_myrtles <- subset(agent_census, female == 1 & 
                               age >= 15 & age <= 49 &
-                              !is.na(spouse_id))
+                              !is.na(spouse_id) &
+                              is.na(death_recorded))
   
   # This equation simulates the yearly likelihood of each female individual of reproductive age giving birth in order to generate an average number of births per year that reflects the assigned total fertility rate (TFR), based on the identified years of reproduction and the starting population size.
   # average annual probability of giving birth
@@ -52,7 +53,7 @@ sow <- function(tfr, agent_census){
 
 # new_mothers = the output of the sow() function above. 
 birth_new_agents <- function(agent_census, new_mothers){
-  
+  if(nrow(new_mothers) > 0){
   # Create a data frame with a single row of NA values
   newborns <- data.frame(matrix(0, nrow = nrow(new_mothers), ncol = ncol(agent_census)))
   # Set the column names to match those of agent_census
@@ -69,6 +70,7 @@ birth_new_agents <- function(agent_census, new_mothers){
   newborns$death_recorded <- NA
   
   agent_census <- rbind(agent_census, newborns)
+  }
   return(agent_census)
 }
 
