@@ -68,17 +68,20 @@ select_marriage_partners <- function(agent_census, calculate_dyad_score = calc_d
   single_women <- singles %>% filter(female == 1)
   single_men <- singles %>% filter(female == 0)
   
+  
+  if(nrow(single_women) > 0 & nrow(single_men) > 0){
   # set up empty matrix ready to populate with dyad compatibility scores
   dyad_scores <- matrix(NA, nrow = nrow(single_women), ncol = nrow(single_men))
-  
-  for(woman in 1:nrow(single_women)){
-    for(man in 1:nrow(single_men)){
-      
-      dyad_scores[woman,man] <- calculate_dyad_score(single_women, single_men, woman, man)
+
+    for(woman in 1:nrow(single_women)){
+      for(man in 1:nrow(single_men)){
+        
+        dyad_scores[woman,man] <- calculate_dyad_score(single_women, single_men, woman, man)
+      }
     }
-  }
-  rownames(dyad_scores) <- single_women$agent_id
-  colnames(dyad_scores) <- single_men$agent_id
+    rownames(dyad_scores) <- single_women$agent_id
+    colnames(dyad_scores) <- single_men$agent_id
+  
   
   # identify the most compatible couples
   for (i in 1:min(nrow(single_men), nrow(single_women))) {
@@ -93,11 +96,12 @@ select_marriage_partners <- function(agent_census, calculate_dyad_score = calc_d
     paired_man <- single_men[dyad_lowest_score_column,]$agent_id
     agent_census[which(agent_census$agent_id == paired_man),]$spouse_id <- paired_woman
     agent_census[which(agent_census$agent_id == paired_woman),]$spouse_id <- paired_man
-  }
+   }
+ }
   # agent_census should now have new values in the spouse_id column that correspond to IDs of the newlyweds. 
   return(agent_census)
-}
 
+}
 
 
 
@@ -128,8 +132,15 @@ agent_census <- cbind(agent_census, agent_languages)
 
 
 
-# simulate wedding season
-test <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_similarity)
+# simulate 10 years of weddings
+years <- 10
+singles_count <- list(nrow(agent_census))
+for(i in seq(years)){
+  
+  agent_census <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_similarity)
+  singles_count[[i + 1]] <- sum(is.na(agent_census$spouse_id))
+}
+unlist(singles_count)
 
-
-
+hist(agent_census[which(is.na(agent_census$spouse_id)),]$age)
+# After 5 years, the only unmarried people were under age 20 or over age 60 -- no compatible pairs left, given the population age structure. Once fertility is introduced, this problem should correct itself. 
