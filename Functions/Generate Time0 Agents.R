@@ -12,6 +12,13 @@
 # The output data frame is the starting population for the model. 
 
 
+### Calculate Ages
+# This function needs to:
+# 1. Assign agent ages at Time0 according to
+#  - a reasonable basic distribution,
+#  - or, by sampling the distribution of ages in a real-world reference population. 
+
+
 
 ### Assign language proficiencies in initial population:
 # This funciton needs to:
@@ -64,98 +71,87 @@ test <- make_uniform_population(500, 90)
 
 #### Function to generate an age-structured starting population ####
 
-### **This is proving to be quite tricky. Might need help on this one. ** ###
-
-### Choose mortality regime
-Tsimane <- data.frame(a1= 0.221,
-                      b1= 1.193,
-                      a2= 0.009,
-                      a3= 0.000023,
-                      b3= 0.119)
-
-### Choose fertility rate
-fertility = 10
-
-
-# n = number of starting agents
-# fertility = total fertility rate, an integer of average total births per woman 
-# mortality = a named data frame of siler parameter values
-
-
-# n = 1000
-# mortality = Tsimane
-# generations = 10
-
-
-
-push_demography <- function(n, fertility, mortality, years){
-  
-agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = n), FUN = generate_agent_id))
-
-# uniform age structure
-agent_census$age <- sample(0:80, n, replace = TRUE)
-
-# alternate assigning male and female state for each agent. 
-agent_census$female <- rep(c(0,1), nrow(agent_census)/2)
-
-# create empty variables for record keeping
-agent_census$spouse_id <- NA
-agent_census$mother_id <- NA
-agent_census$father_id <- NA
-agent_census$death_recorded <- NA
-
-for(i in seq_len(years)){
-  # Agents must marry, because only partnered women become mothers in the sow() function.
-  rolling_census <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_similarity)
-  
-  # Assign motherhood
-  new_mothers <- sow(tfr = fertility, agent_census = rolling_census)
-  
-  # Generate new agent data from new mother births.
-  rolling_census <- birth_new_agents(rolling_census, new_mothers)
-  
-  # Record deaths
-  rolling_census <- reap(rolling_census, mortality_regime = mortality)
-  
-  # Update ages of survivors
-  rolling_census$age[is.na(rolling_census$death_recorded)] <- rolling_census$age[is.na(rolling_census$death_recorded)] + 1
-  rolling_census$year_of_death[is.na(rolling_census$death_recorded)] <- i
-  
-  # Update the agent_census with the current generation's data
-  agent_census <- rolling_census
-  
+calc_age_basic <- function(n_draws, ...){
+  rpois(n_draws, 10)
 }
 
-# Plot population age structure
-p <- ggplot(agent_census[is.na(agent_census$death_recorded),], aes(x = age)) +
-  geom_histogram(binwidth = 1) +
-  labs(title = "Population Age Structure", x = "Age", y = "Frequency")
+test <- calc_age_basic(n_draws = 1000)
 
-return(list(plot = p, final_census = agent_census))
+
+
+make_basic_population <- function(n_draws, max_age){
+  agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = n), FUN = generate_agent_id))
+  
+  # uniform age structure
+  agent_census$age <- sample(0:max_age, n, replace = TRUE)
+  
+  # alternate assigning male and female state for each agent. 
+  agent_census$female <- rep(c(0,1), nrow(agent_census)/2)
+  
+  # create empty variables for record keeping
+  agent_census$spouse_id <- NA
+  agent_census$mother_id <- NA
+  agent_census$father_id <- NA
+  agent_census$death_recorded <- NA
+  agent_census$year <- NA
+  
+  # create columns to language proficiency variables
+  agent_languages <- as.data.frame(matrix(0, nrow = nrow(agent_census), ncol = length(languages)))
+  names(agent_languages) <- languages
+  
+  agent_census <- cbind(agent_census, agent_languages)
+  
+  return(agent_census)
 }
 
 
+test <- make_uniform_population(500, 90)
 
 
-
-
-
-test <- push_demography(1000, fertility = 4, mortality = Tsimane, years = 50)
 
 
 
 #### There must be a way to create stable populations by calculating the birth rate that balances out the death rate. 
+#### I think I figured it out ####
+
+# n = number of agents
+# mortality = name of designated Siler function variant
+# years = length of time to run the simulation in order to get a mortality-determined age structure in a stationary population. 
+generate_age_structure <- function(n, mortality, years){
+agent_census <- make_uniform_population(n, max_age = 80) # start with a uniform age distribution
+
+# force population size to stay stable by matching fertility to mortality, but allow mortality risk to be a function of age.
+ for(t in seq(years)){
+ # agent_census$year <- i
+  # Record this year's deaths
+  agent_census <- reap(agent_census, mortality_regime = CDW15)$agent_census 
+  alive <- agent_census[which(is.na(agent_census$death_recorded)),]
+  #  Pair up males/females for reproductive partnerships:
+  alive <- select_marriage_partners(alive, calculate_dyad_score = calc_dyad_age_similarity)
+  
+  # - Calculate number of deaths this year based on age structure of population. This will determine the number of births. 
+  turnover <- nrow(agent_census) - nrow(alive) 
+  # - Generate new births in existing partnerships. Assign traits to newborn agents. 
+  new_parents <- sow_stationary(n_births = turnover, alive)
+  alive <- birth_new_agents(alive, new_parents)
+  
+  #- People who survived this round turn 1 year older
+  alive$age <- alive$age + 1
+  # assign the living back to the data frame that will be exposed to mortality probability at the start of the next loop
+  agent_census <- alive
+# Repeat all of this living for the next value of time t.
+ }
+
+ age <- agent_census$age
+ return(age) # the population age distribution should not be uniform anymore -- it should be shaped by the mortality hazard. 
+}
 
 
 
+test <- generate_age_structure(n = 10000, mortality = CDW15, years = 300)
+hist(test)
 
 
-# create columns to language proficiency variables
-# agent_languages <- as.data.frame(matrix(0, nrow = nrow(agent_census), ncol = length(languages)))
-# names(agent_languages) <- languages
-# 
-# 
-# agent_census <- cbind(agent_census, agent_languages)
 
 
 ########################################################################################
