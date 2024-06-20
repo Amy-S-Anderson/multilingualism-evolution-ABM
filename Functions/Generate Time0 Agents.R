@@ -62,7 +62,52 @@ make_uniform_population <- function(n, max_age){
 }
 
 
-test <- make_uniform_population(500, 90)
+# test <- make_uniform_population(500, 90)
+
+
+
+
+
+
+
+#### Function to calculate the age distribution in a stationary population as a function of the mortality hazard #### 
+
+# This function is a necessary precursor to the function below, which will generate a data frame of age-structured Time0 agents
+# n = number of agents
+# mortality = name of designated Siler function variant
+# years = length of time to run the simulation in order to get a mortality-determined age structure in a stationary population. 
+generate_age_structure <- function(n, mortality, years){
+  agent_census <- make_uniform_population(n, max_age = 80) # start with a uniform age distribution
+  
+  # force population size to stay stable by matching fertility to mortality, but allow mortality risk to be a function of age.
+  for(t in seq(years)){
+    # agent_census$year <- i
+    # Record this year's deaths
+    agent_census <- reap(agent_census, mortality_regime = CDW15)$agent_census 
+    alive <- agent_census[which(is.na(agent_census$death_recorded)),]
+    #  Pair up males/females for reproductive partnerships:
+    alive <- select_marriage_partners(alive, calculate_dyad_score = calc_dyad_age_similarity)
+    
+    # - Calculate number of deaths this year based on age structure of population. This will determine the number of births. 
+    turnover <- nrow(agent_census) - nrow(alive) 
+    # - Generate new births in existing partnerships. Assign traits to newborn agents. 
+    new_parents <- sow_stationary(n_births = turnover, alive)
+    alive <- birth_new_agents(alive, new_parents)
+    
+    #- People who survived this round turn 1 year older
+    alive$age <- alive$age + 1
+    # assign the living back to the data frame that will be exposed to mortality probability at the start of the next loop
+    agent_census <- alive
+    # Repeat all of this living for the next value of time t.
+  }
+  
+  age <- agent_census$age
+  return(age) # the population age distribution should not be uniform anymore -- it should be shaped by the mortality hazard. 
+}
+
+
+# test <- generate_age_structure(n = 10000, mortality = CDW15, years = 300)
+
 
 
 
@@ -71,19 +116,11 @@ test <- make_uniform_population(500, 90)
 
 #### Function to generate an age-structured starting population ####
 
-calc_age_basic <- function(n_draws, ...){
-  rpois(n_draws, 10)
-}
-
-test <- calc_age_basic(n_draws = 1000)
-
-
-
-make_basic_population <- function(n_draws, max_age){
-  agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = n), FUN = generate_agent_id))
+make_basic_population <- function(n_agents, age_distribution){
+  agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = n_agents), FUN = generate_agent_id))
   
   # uniform age structure
-  agent_census$age <- sample(0:max_age, n, replace = TRUE)
+  agent_census$age <- sample(age_distribution, size = n_agents, replace = TRUE)
   
   # alternate assigning male and female state for each agent. 
   agent_census$female <- rep(c(0,1), nrow(agent_census)/2)
@@ -105,51 +142,7 @@ make_basic_population <- function(n_draws, max_age){
 }
 
 
-test <- make_uniform_population(500, 90)
 
-
-
-
-
-#### There must be a way to create stable populations by calculating the birth rate that balances out the death rate. 
-#### I think I figured it out ####
-
-# n = number of agents
-# mortality = name of designated Siler function variant
-# years = length of time to run the simulation in order to get a mortality-determined age structure in a stationary population. 
-generate_age_structure <- function(n, mortality, years){
-agent_census <- make_uniform_population(n, max_age = 80) # start with a uniform age distribution
-
-# force population size to stay stable by matching fertility to mortality, but allow mortality risk to be a function of age.
- for(t in seq(years)){
- # agent_census$year <- i
-  # Record this year's deaths
-  agent_census <- reap(agent_census, mortality_regime = CDW15)$agent_census 
-  alive <- agent_census[which(is.na(agent_census$death_recorded)),]
-  #  Pair up males/females for reproductive partnerships:
-  alive <- select_marriage_partners(alive, calculate_dyad_score = calc_dyad_age_similarity)
-  
-  # - Calculate number of deaths this year based on age structure of population. This will determine the number of births. 
-  turnover <- nrow(agent_census) - nrow(alive) 
-  # - Generate new births in existing partnerships. Assign traits to newborn agents. 
-  new_parents <- sow_stationary(n_births = turnover, alive)
-  alive <- birth_new_agents(alive, new_parents)
-  
-  #- People who survived this round turn 1 year older
-  alive$age <- alive$age + 1
-  # assign the living back to the data frame that will be exposed to mortality probability at the start of the next loop
-  agent_census <- alive
-# Repeat all of this living for the next value of time t.
- }
-
- age <- agent_census$age
- return(age) # the population age distribution should not be uniform anymore -- it should be shaped by the mortality hazard. 
-}
-
-
-
-test <- generate_age_structure(n = 10000, mortality = CDW15, years = 300)
-hist(test)
 
 
 
