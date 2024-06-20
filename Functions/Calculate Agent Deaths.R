@@ -44,11 +44,14 @@ reap <- function(agent_census, mortality_regime){
   pop$death_recorded <- case_when(pop$agent_id %in% unlucky_ones$agent_id ~ "yes", 
             TRUE ~ as.character(pop$death_recorded))
   
-    return(pop)
+    return(list(agent_census = pop, pop_turnover = nrow(unlucky_ones)))
 }
 
 
 
+
+# choose the Siler model parameter values for the mortality regime your agents will experience.
+CDW15 <- data.frame(a1 = 0.175, b1 = 1.4, a2 = 0.00368, a3 = 0.000075, b3 = 0.0917)
 
 ########################################################################################
 
