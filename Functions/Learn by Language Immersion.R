@@ -88,18 +88,17 @@ learn_languages <- function(agent_language_exposures, pop = agent_census){
   }
   
   
-  age = seq(from = 0, to = 90)
+  age = seq(from = 0, to = 120)
   age_rate = sapply(age, FUN = age_factor)
   
   languages <- pop %>%
     select(starts_with("Language")) %>%
     names()
   
-  for(i in seq_len(nrow(pop[1:10]))){
+  for(i in seq_len(nrow(pop))){
     for(lang in languages){
       pop[i, lang] <- pop[i, lang] + # current language proficiency
         (age_rate[pop[i, "age"] + 1] * agent_language_exposures[i, lang]) # newly gained language proficiency
-      
       if (pop[i, lang] > 100) {
         pop[i, lang] <- 100 # set a proficiency ceiling at 100
       }
