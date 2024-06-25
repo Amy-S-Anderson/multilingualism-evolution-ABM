@@ -78,7 +78,7 @@ agents <- data.frame(agent_id, age, death_recorded = NA)
 test <- reap(agents, mortality_regime = Tsimane)
 
 
-ggplot(test, aes(x = age)) +
-  geom_bar(aes(fill = as.factor(time_to_die))) +
+ggplot(test$agent_census, aes(x = age)) +
+  geom_bar(aes(fill = as.factor(death_recorded))) +
   labs(fill = "died") +
   theme_bw()
