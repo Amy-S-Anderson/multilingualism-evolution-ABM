@@ -29,7 +29,21 @@ function_files <- function_files[which(function_files != "./Functions//Generate 
 function_files <- c(first_function, function_files, generate_starting_pop) # put it back in as the first item in the list of names. 
 
 # apply the source() command to all Function file names them to pull the functions into the working environment. 
-sapply(function_files, FUN=source) 
+sapply(function_files, FUN=source) # not sure why this is now throwing an error....
+```
+
+
+```{r, include=FALSE, eval = FALSE}
+### for checking individual files if the bulk loading function isn't working
+source(first_function)
+source("./Functions//Choose languages.R")
+source("./Functions//Marriage.R")
+source("./Functions//Calculate Agent Births.R")
+source("./Functions//Calculate Agent Deaths.R")
+source("./Functions//Pair agents for conversations.R")
+source("./Functions//Learn by Language Immersion.R")
+
+
 
 ```
 
@@ -78,27 +92,36 @@ names(output) <- names(agent_census)
 
 Set years of model run time.
 ```{r}
-tmax = 2
+tmax = 200
 ```
 
 ```{r}
 for(i in seq(tmax)){
-# Calculate number of deaths this year based on age structure of population.
+   print(i) # Loop Counter will appear in the console to let you know how the model run is progressing. 
+   
+# Calculate number of deaths there will be this year based on age structure of population.
 agent_census <- agent_census[which(is.na(agent_census$death_recorded)),]
-turnover <- reap(agent_census, mortality_regime = CDW15)$pop_turnover
 
 #  Pair up males/females for reproductive partnerships:
 agent_census <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_similarity)
 
+deaths <- reap(agent_census, mortality_regime = CDW15)
+turnover <- deaths$pop_turnover
+# Record this year's deaths
+agent_census <- deaths$agent_census
+
+#- People who lived through this round turn 1 year older
+agent_census$age <- agent_census$age + 1
+
 # - Generate new births in existing partnerships. Assign traits to newborn agents. 
-new_mothers <- sow_stationary(n_births = turnover, agent_census)
+new_mothers <- sow_stationary(n_births = turnover, agent_census) # this function only applies to living women. 
 agent_census <- birth_new_agents(agent_census, new_mothers)
 
 # - Pick conversation partners for the year.
-# This function assigns partners by sampling at random, with replacement. Each agent will experience a minimum of 10 conversations. 
+# This function assigns partners by sampling at random, with replacement. Each agent will experience a minimum of 10 conversations.
 interactions <- select_conversation_partners(agent_census)
 
-# - Now that the interaction matrix for this round is generated, Count up the number of interactions each agent has had. 
+# - Now that the interaction matrix for this round is generated, Count up the number of interactions each agent has had.
 conversants <- sapply(seq(agent_census$agent_id), record_conversations, interactions)
 
 # -  Record which language each agent chooses to speak in each conversation:
@@ -116,12 +139,6 @@ names(agent_language_exposures) <- languages
 #   2. their age at time of exposure t.
 agent_census <- learn_languages(agent_language_exposures, pop = agent_census)
 
-#- People who lived through this round turn 1 year older
-agent_census$age <- agent_census$age + 1
-
-# Record this year's deaths
-agent_census <- reap(agent_census, mortality_regime = CDW15)$agent_census 
-
 # record the year
 agent_census$year <- i
  
@@ -130,13 +147,11 @@ output <- rbind(output, agent_census)
 # Repeat all of this living for the next value of time t.
 
 }
+
+write.csv(output, file = "./Simulated Data/first_run_scenario1.csv")
 ```
 
 
-
-Demography only, no language: 
-
- 
 
 
 
@@ -146,14 +161,87 @@ pop_size_table <- output %>%
    group_by(year) %>%
    summarise(pop_count = n())
 pop_size_table
+
+ggplot(pop_size_table, aes(x = year, y = pop_count)) +
+   geom_line()
 ```
+Damn, the population isn't quite stationary. Will have to look into that. 
+
+
+
+To see whether this is just an errant run: 
+ - remove the social learning functions
+ - run just the demography, n = 1,000 agents; years = 100; runs = 100
+ - see if, on average, the population stays stable
+```{r}
+
+d <- make_basic_population(n_agents = 1000, age_distribution = initial_ages)
+years <- 100
+runs <- 100
+
+
+test_demography <- function(agents, years){
+   #Initialize output table
+output <- data.frame(year = seq(years), pop_size = 0)
+for(i in seq(years)){
+# Calculate number of deaths there will be this year based on age structure of population.
+d <- d[which(is.na(d$death_recorded)),]
+
+#  Pair up males/females for reproductive partnerships:
+d <- select_marriage_partners(d, calculate_dyad_score = calc_dyad_age_similarity)
+
+deaths <- reap(d, mortality_regime = CDW15)
+turnover <- deaths$pop_turnover
+# Record this year's deaths
+d <- deaths$agent_census
+
+# - Generate new births in existing partnerships. Assign traits to newborn agents. 
+new_mothers <- sow_stationary(n_births = turnover, d)
+d <- birth_new_agents(d, new_mothers)
+
+#- People who lived through this round turn 1 year older
+d$age <- d$age + 1
+
+# add the census for this year to the running total of data output
+output[i,"pop_size"] <- nrow(d)
+# Repeat all of this living for the next value of time t.
+}
+return(output)
+}
+
+
+# churn out 100 iterations of the same population dynamics -- is it truly a stable population, on average, across runs?
+pop_test <- data.frame()
+for(i in seq(runs)){ ### <-- This would be more efficient as an apply() function than as a for loop. Future homework. 
+   test <- test_demography(agents = d, years = 100)
+   test$run <- i
+   pop_test <- bind_rows(pop_test, test)
+
+}
+# calculate average population size across all runs
+pop_mean <- pop_test %>% group_by(year) %>% summarise(mean_pop = mean(pop_size))
+
+# plot population size -- should be stable. 
+ggplot(pop_test, aes(x = year, y = pop_size)) +
+   geom_line(aes(color = as.factor(run), group = run), alpha = 0.2) +
+   theme_linedraw() +
+   theme(legend.position = "none") +
+   geom_line(data = pop_mean, aes(x = year, y = mean_pop), color = "black", size = 2) +
+   labs(y = "population size")
+
+```
+ 
+Stationarity achieved!!!
+ 
+ 
+ 
+ 
 
 
 Take a look at the population age structure that emerges from the mortality function:
 ```{r}
-ggplot(output, aes(x = age)) +
-   geom_histogram() +
-   facet_wrap(~year)
+ggplot(output[output$year == 100,], aes(x = age)) +
+   geom_histogram() 
 ```
 
 Count number of speakers of each language in each year of model time:
@@ -172,6 +260,46 @@ ten_yrold_speakers_table <- output %>%
              SpeakersB = round((sum(`Language B` > 20) / n() * 100), 2),
              SpeakersC = round((sum(`Language B` > 20) / n() * 100), 2))
 ```
+
+
+```{r}
+# transform speaker frequency tables into long data for plotting
+speaker_freq <- speaker_count_table %>%
+   pivot_longer(cols = c("SpeakersA", "SpeakersB", "SpeakersC"), names_to = "Language", values_to = "Speakers")
+
+speaker_freq10 <- ten_yrold_speakers_table %>%
+   pivot_longer(cols = c("SpeakersA", "SpeakersB", "SpeakersC"), names_to = "Language", values_to = "Speakers")
+
+
+all_speakers_plot <- ggplot(speaker_freq, aes(x = year, y = Speakers)) +
+   geom_line(aes(color = Language)) +
+   facet_wrap(~Language) +
+   theme_linedraw() +
+   labs(y = "% of population") +
+   theme(legend.position = "none") +
+   ggtitle("All Agents")
+over10_speakers_plot <- ggplot(speaker_freq10, aes(x = year, y = Speakers)) +
+   geom_line(aes(color = Language)) +
+   facet_wrap(~Language) +
+   theme_linedraw() +
+   labs(y = "% of population") +
+   theme(legend.position = "none") +
+   ggtitle("Agents aged 10+ years")
+
+plot_grid(all_speakers_plot, over10_speakers_plot, ncol = 1)
+```
+```{r}
+# save_plot()
+```
+
+Points to follow up on: 
+ - Why is the population shrinking? How to make it stationary?
+ - Who are the agent who are not trilingual after 75 years? Ah, they're children below age 10.
+ 
+ **Write a one-sentence summary of what this figure is illustrating**
+ 
+ 
+ 
 
 Plot proficiency trajectories across the timeframe of the model:
 ```{r}
