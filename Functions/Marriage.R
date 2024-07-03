@@ -43,17 +43,17 @@ calc_dyad_age_similarity <- function(single_women, single_men, woman, man){
 
 
 ####### THIS FUNCTION DOESN'T WORK YET -- NEEDS PROFICIENCY SCORES IN THE LANGUAGE COLUMNS IN ORDER TO TEST IT. 
-calc_dyad_age_language1 <- function(single_women, single_men, woman, man, proficiency_threshold = 100){
-  
-  # calculate age gap for the two individuals in question
-  age_gap <- single_men$age[man] - single_women$age[woman]
-  shared_language <- ifelse(any(single_men$agent_id[man] == single_women$agent_id[woman] & single_men[man, language] > x), "yes", "no") ### this definitely doesn't work. come back to this. 
-
-  
-  dyad_score <- abs(age_gap) # dyad compatibility = absolute value of the two agents' difference in age
-  return(dyad_score)
-}
-
+# calc_dyad_age_language1 <- function(single_women, single_men, woman, man, proficiency_threshold = 100){
+#   
+#   # calculate age gap for the two individuals in question
+#   age_gap <- single_men$age[man] - single_women$age[woman]
+#   shared_language <- if(colnames(single_men[man, which(language >= proficiency_threshold)] == single_women$agent_id[woman] & single_men[man, language] > x), "yes", "no") ### this definitely doesn't work. come back to this. 
+# 
+#   
+#   dyad_score <- abs(age_gap) + shared_language # dyad compatibility = absolute value of the two agents' difference in age
+#   return(dyad_score)
+# }
+# 
 
 #### Function: Select Marriage Partners
 

@@ -165,75 +165,6 @@ pop_size_table
 ggplot(pop_size_table, aes(x = year, y = pop_count)) +
    geom_line()
 ```
-Damn, the population isn't quite stationary. Will have to look into that. 
-
-
-
-To see whether this is just an errant run: 
- - remove the social learning functions
- - run just the demography, n = 1,000 agents; years = 100; runs = 100
- - see if, on average, the population stays stable
-```{r}
-
-d <- make_basic_population(n_agents = 1000, age_distribution = initial_ages)
-years <- 100
-runs <- 100
-
-
-test_demography <- function(agents, years){
-   #Initialize output table
-output <- data.frame(year = seq(years), pop_size = 0)
-for(i in seq(years)){
-# Calculate number of deaths there will be this year based on age structure of population.
-d <- d[which(is.na(d$death_recorded)),]
-
-#  Pair up males/females for reproductive partnerships:
-d <- select_marriage_partners(d, calculate_dyad_score = calc_dyad_age_similarity)
-
-deaths <- reap(d, mortality_regime = CDW15)
-turnover <- deaths$pop_turnover
-# Record this year's deaths
-d <- deaths$agent_census
-
-# - Generate new births in existing partnerships. Assign traits to newborn agents. 
-new_mothers <- sow_stationary(n_births = turnover, d)
-d <- birth_new_agents(d, new_mothers)
-
-#- People who lived through this round turn 1 year older
-d$age <- d$age + 1
-
-# add the census for this year to the running total of data output
-output[i,"pop_size"] <- nrow(d)
-# Repeat all of this living for the next value of time t.
-}
-return(output)
-}
-
-
-# churn out 100 iterations of the same population dynamics -- is it truly a stable population, on average, across runs?
-pop_test <- data.frame()
-for(i in seq(runs)){ ### <-- This would be more efficient as an apply() function than as a for loop. Future homework. 
-   test <- test_demography(agents = d, years = 100)
-   test$run <- i
-   pop_test <- bind_rows(pop_test, test)
-
-}
-# calculate average population size across all runs
-pop_mean <- pop_test %>% group_by(year) %>% summarise(mean_pop = mean(pop_size))
-
-# plot population size -- should be stable. 
-ggplot(pop_test, aes(x = year, y = pop_size)) +
-   geom_line(aes(color = as.factor(run), group = run), alpha = 0.2) +
-   theme_linedraw() +
-   theme(legend.position = "none") +
-   geom_line(data = pop_mean, aes(x = year, y = mean_pop), color = "black", size = 2) +
-   labs(y = "population size")
-
-```
- 
-Stationarity achieved!!!
- 
- 
  
  
 
@@ -291,10 +222,6 @@ plot_grid(all_speakers_plot, over10_speakers_plot, ncol = 1)
 ```{r}
 # save_plot()
 ```
-
-Points to follow up on: 
- - Why is the population shrinking? How to make it stationary?
- - Who are the agent who are not trilingual after 75 years? Ah, they're children below age 10.
  
  **Write a one-sentence summary of what this figure is illustrating**
  
