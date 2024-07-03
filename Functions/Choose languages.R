@@ -57,7 +57,7 @@ sample_at_random <- function(speaker_languages){
 }
 
 
-
+coordinate_max_proficiency <- function()
 ########################################################################################
 
 #### Function to record the language spoken by each agent in each conversation in this round of model time t ####
@@ -81,34 +81,65 @@ sample_at_random <- function(speaker_languages){
 # language_choice_strategy = a named function outlining the logic of individual agents for choosing a language to speak in a given interaction. Defaults to random sampling of an agent's known languages. 
 # pop = data frame of agent traits. Defaults to the agent_census data frame created by other model functions that should be called before this one. 
 
-select_language_of_conversation <- function(agent_conversation_partners, language_choice_strategy = sample_at_random, pop = agent_census){
+
+select_language_of_conversation_at_random <- function(agent_conversation_partners, pop = agent_census){
   
   # Extract the relevant columns once
-  language_data <- pop %>%
-    select(agent_id, contains("Language"))
+  language_data <- pop[pop$agent_id %in% agent_conversation_partners, c ("agent_id", languages)] %>%
+    pivot_longer(cols = starts_with("Language"), names_to = "can_speak", values_to = "proficiency") %>%
+    filter(proficiency > 20) %>%
+    group_by(agent_id) %>%
+    summarise(spoken = if(n() > 0) sample(can_speak, size = 1))
   
-  spoken <- vector("character", length(agent_conversation_partners))
-  
-  for(speaker in seq_along(agent_conversation_partners)){
-    speaker_id <- agent_conversation_partners[speaker]
-    
-    # Filter the speaker's languages and their proficiency levels
-    speaker_languages <- language_data %>%
-      filter(agent_id == speaker_id) %>%
-      select(-agent_id) %>%
-      pivot_longer(cols = starts_with("Language"), names_to = "can_speak", values_to = "proficiency") %>%
-      filter(proficiency > 20) %>%
-      pull(can_speak)
-    
-    # Each speaker picks a language to speak
-    spoken[speaker] <- if(length(speaker_languages) > 0){
-      sample_at_random(speaker_languages)
-    } else {
-      NA
-    }
-  }
-  
-  spoken <- spoken[!is.na(spoken)]  # remove NAs (conversation partner was an infant who can't speak yet)
-  return(spoken)
+  return(language_data$spoken)
 }
+
+
+
+
+
+
+
+#### Function to select the language of conversation: Agents must agree on which language to speak. 
+# They select the language that maximizes shared proficiency
+# To do this, compare conversation partners' proficiency values for each language. Pick the language that has the highest low value. 
+
+# converse_in_max_proficiency <- function(agent_conversation_partners, pop = agent_census){
+#   
+#   # Extract the relevant columns
+#   language_data <- pop %>%
+#     select(agent_id, contains("Language"))
+#   
+#   ego <- agent_conversation_partners[1]
+#   alters <- agent_conversation_partners[-1]
+#   
+#   spoken_ego <- vector("character", length(agent_conversation_partners))
+#   spoken_alter <- vector("character", length(agent_conversation_partners))
+#   
+#   
+  
+# calc_highest_min_proficiency <- function(alter){
+#   for(lang in languages){ # for each language, return the min proficiency value in the conversant dyad. 
+#    min_proficiency <- min(c(language_data[1, lang], language_data[which(language_data$agent_id == alter), lang])) 
+#    if(min_proficiency > 20){ # but only if both partners have a proficiency value in this language > a monolingual two-year-old
+#      lang_match[lang] <- min_proficiency} 
+#    else(lang_match[lang] <- max(c(language_data[1, lang], language_data[which(language_data$agent_id == alter), lang]))) # if at least one partner is an infant, select the strongest language of the other partner. 
+#      names(lang_match[lang]) <- languages[lang]
+#    
+#   }
+# converse_in <- names(lang_match[which(lang_match == max(lang_match))]) # list the names of the agents' shared languages with the highest min proficiency value
+# if(length(converse_in) > 1) converse_in <- sample(converse_in, size = 1) # if there's a tie among conversation partners for the language with the highest min proficiency, pick amongt the tied languages at random.  
+# converse_in <- converse_in[!is.na(converse_in)]  # remove NAs (conversation partner was an infant who can't speak yet)
+# return(converse_in)
+# }
+# 
+
+
+#test <- sapply(alters, FUN = calc_highest_min_proficiency)
+
+
+
+
+
+
 
