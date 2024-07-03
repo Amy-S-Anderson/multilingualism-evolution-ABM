@@ -45,13 +45,19 @@ record_conversations <- function(agent_id, interactions = interactions){
 
 # Again, this function is designed to run on a vector of conversations experienced by a single agent. To return values for all agents, use an apply function.
 # on its own, it returns a vector of length(languages). 
-# The language to which the agent is exposed most often will have an exposure value of 1. Other language exposures will be scaled relative to this. 
+# If absolute_exposure = FALSE, then The language to which the agent is exposed most often will have an exposure value of 1. Other language exposures will be scaled relative to this. 
+# If absolute_exposure = TRUE, then each agent's language exposure is scaled relative to a pre-determined value for the saturation exposure —- the number of conversations at which the gain in language proficiency reaches its ceiling. Additional conversations in this language after the saturation exposure has been reached will not improve an agent's proficiency gains in this language during this year of model time. 
 
 
 
 # conversation_languages_vector = a vector of language names, indicating the language spoken in each conversation that this agent experienced in this round of model time t.
 # pop = a data frame of agent traits. Defaults to the agent_census data frame created by other model functions that should be called before this one. 
-calculate_language_exposures <- function(conversation_languages_vector, pop = agent_census){
+# absolute_exposure = a logical value indicating whether the effect of an agent's exposure to a given language will be scaled relative to an absolute count (the saturation exposure), or relative to the exposure count for their most commonly experienced language in that round of model time.
+  # Absolute exposure assumes that there are diminishing marginal returns for the effect of language exposure on gains in language proficiency. It also means that agents who have more exposure events (i.e., conversations with other agents) learn more than agents with fewer exposure events. 
+# saturation_exposure = a number, only to be specified when absolute_exposure = TRUE. This is the exposure count that results in maximum proficiency gains in that language for this year of model time. 
+# non_linear_scaling = a number. Defaults to 1 (linear scaling). If it isn't 1, then the relationship between language exposure and proficiency gain is non-linear. 
+calculate_language_exposures <- function(conversation_languages_vector, pop = agent_census, 
+                                         absolute_exposure = FALSE, saturation_exposure = NULL, non_linear_scaling = 1){
   
   languages <- agent_census %>%
     select(starts_with("Language")) %>%
@@ -65,7 +71,11 @@ calculate_language_exposures <- function(conversation_languages_vector, pop = ag
     exposure_count[lang] <- length(conversation_languages_vector[which(conversation_languages_vector == languages[lang])])
   }
   
-  relative_exposures <- exposure_count / max(exposure_count)
+  if(absolute_exposure == TRUE){ 
+    relative_exposures <- (exposure_count / saturation_exposure)^non_linear_scaling
+    if(relative_exposures < 1) {relative_exposures <- 1} # cap the possible proficiency gains for agents who exceed the saturation exposure for a language
+  } else{relative_exposures <- exposure_count / max(exposure_count)}
+  
   return(relative_exposures)
 }
 
@@ -78,33 +88,25 @@ calculate_language_exposures <- function(conversation_languages_vector, pop = ag
 
 #### Function to LEARN LANGUAGES as a result of social interactions ####
 
-# agent_language_exposures = the output of the calculate_language_exposures() function above, applied to the full agent_census data frame. Should be a data frame with ncols = length(languages) and nrows = nrow(agent_census)
-learn_languages <- function(agent_language_exposures, pop = agent_census){
+# language_exposures = the output of the calculate_language_exposures() function above, applied to the full agent_census data frame. Should be a data frame with ncols = length(languages) and nrows = nrow(agent_census)
+# pop = a data frame of agent characteristics, including agent ID, age, and current proficiency in each language
+# pop_languages = a character vector of the names of the languages being simulated in the model space. 
+learn_languages <- function(language_exposures = agent_language_exposures, pop = agent_census, pop_languages = languages){
   
-  # function for effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
-  age_factor <- function(age){
-    params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
-    params$r0 * (1 - (1 / (1 + exp(-params$a * (age - params$tc - params$d))))) + 0.5
-  }
+  # effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
+  ages = seq(from = 0, to = 120)
+  params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
+  age_factor <-  params$r0 * (1 - (1 / (1 + exp(-params$a * (age - params$tc - params$d))))) + 0.5
+  age_rate <- ages * age_factor
   
-  
-  age = seq(from = 0, to = 120)
-  age_rate = sapply(age, FUN = age_factor)
-  
-  languages <- pop %>%
-    select(starts_with("Language")) %>%
-    names()
-  
-  for(i in seq_len(nrow(pop))){
-    for(lang in languages){
-      pop[i, lang] <- pop[i, lang] + # current language proficiency
-        (age_rate[pop[i, "age"] + 1] * agent_language_exposures[i, lang]) # newly gained language proficiency
-      if (pop[i, lang] > 100) {
-        pop[i, lang] <- 100 # set a proficiency ceiling at 100
-      }
-    }
+  for(lang in pop_languages){
+    pop[,lang] <- pop[,lang] +  # current language proficiency
+      age_rate[pop$age + 1] * language_exposures[lang] # newly gained language proficiency
+    
+    pop[,lang] <- case_when(pop[,lang] > 100 ~ 100, # set a proficiency ceiling at 100
+                            TRUE ~ as.numeric(pop[,lang]))
   }
   
   return(pop)
+  
 }
-
