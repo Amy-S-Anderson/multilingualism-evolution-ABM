@@ -66,57 +66,54 @@ select_language_of_conversation_at_random(conversants[[1]])
 
 conversations <- conversants[[1]]
 # written to apply to a single row of a matrix
+# conversations = a vector of agent IDs in which the first entry is the focal agent and the following entries are all the agents who conversed with them in this round.
+# pop = agent_census, a data frame of agent IDs and agent characteristics, including proficiency values for each language in the simulation
+# languages = a global object, a character vector naming the languages at play in the simulation. 
 select_language_of_conversation_max_proficiency <- function(conversations, pop = agent_census){
   
-  speakers <- pop[pop$agent_id %in% conversations, c ("agent_id", languages)] 
-    for(lang in languages){
-     speakers[,lang] <- if_else(speakers[,lang] < min_speaking_proficiency, 0, speakers[,lang])
-    }
-  
-  
-  speakers  <- speakers %>%
-    rowwise() %>%
-    mutate(
-      max_proficiency = max(c_across(starts_with("Language")), na.rm = TRUE),
-      highest_proficiency_languages = list(names(.[,-1])[which(c_across(starts_with("Language")) == max_proficiency)]),
-      preferred_language = if (max_proficiency < 20) {
+  # set up speakers and their language proficiencies
+  speakers <- pop[pop$agent_id %in% conversations, c ("agent_id", languages)] %>% # subset the language proficiencies for the agents named in 'conversations'
+    rowwise() %>% # for each agent
+    # identify their max proficiency value
+    mutate(max_proficiency = max(c_across(starts_with("Language")), na.rm = TRUE), 
+      # pull the names of the languages for which their proficiency value = their max proficiency (may be more than one language)
+           highest_proficiency_languages = list(names(.[,-1])[which(c_across(starts_with("Language")) == max_proficiency)]),
+      # identify the agent's preferred language
+           preferred_language = if (max_proficiency < min_speaking_proficiency) { # they can't speak anything if they haven't passed the min_speaking_proficiency threshold
         NA
       } else {
-        max_langs <- names(.[,-1])[which(c_across(starts_with("Language")) == max_proficiency)]
-        if (length(max_langs) == 1) {
-          max_langs
+        if (length(highest_proficiency_languages) == 1) {
+          highest_proficiency_languages
         } else {
-          sample(max_langs, 1)
+          sample(highest_proficiency_languages, 1)
         }
       }
     ) %>%
     ungroup() 
   
-  
-  prof_match <- data.frame(agent_id = speakers$agent_id[-1])
-  for (lang in languages) {
-    if (speakers[1, lang] != 0) {
-      prof_match[, lang] <- if_else(as.numeric(speakers[1, lang]) < speakers[-1, lang], speakers[1, lang], speakers[-1, lang])
-    } else { 
-      prof_match[, lang] <- NA
-    }
-  }
-  prof_match[prof_match == 0] <- NA
-  prof_match$preferred_language <- speakers$preferred_language[-1]
-  
+  prof_match <- data.frame(agent_id = speakers$agent_id[-1]) # subset everyone but the focal agent
+  for (lang in languages) { # for each language
+    prof_match[, lang] <- if(speakers[1, lang] > min_speaking_proficiency){
+      if_else(speakers[-1, lang] > min_speaking_proficiency,  # if they can both speak the language
+      # replace their individual proficiency value with the minimum of c(their value, the focal agent's value)
+      if_else(as.numeric(speakers[1, lang]) < speakers[-1, lang], speakers[1, lang], speakers[-1, lang]),
+      NA) # if they don't speak the language, they can't have a matched min proficiency
+    } else { NA } }
+      
   prof_match <- prof_match %>%
-    rowwise %>%
-    mutate(
-    max_proficiency = max(c_across(starts_with("Language")), na.rm = TRUE),
+    mutate(preferred_language = speakers$preferred_language[-1]) %>%
+    rowwise %>% # for each agent
+    # use the same logic as above in 'speakers' to identify the shared language that maximizes the minimum proficiency in each dyad
+    mutate(max_proficiency = max(c_across(starts_with("Language")), na.rm = TRUE),
     highest_proficiency_languages = list(names(.[,-1])[which(c_across(starts_with("Language")) == max_proficiency)]),
+    # if the dyad doesn't speak any languages in common, each agent speaks their own preferred language (language of highest proficiency)
     language_of_conversation = if(length(highest_proficiency_languages) > 0){sample(highest_proficiency_languages, 1)} else{
       preferred_language
     }) %>%
     ungroup()
-language_of_conversation <- prof_match$language_of_conversation
   
+language_of_conversation <- prof_match$language_of_conversation
   return(language_of_conversation)
-
 }
 
 
@@ -202,110 +199,87 @@ max_col_names <- apply(prof_match[languages], 1, function(row, row_index) {
 test <- select_language_of_conversation_max_proficiency(conversants[[1]], languages = languages)
 test
 
-
-#### Function to select the language of conversation: Agents must agree on which language to speak. 
-# They select the language that maximizes shared proficiency
-# To do this, compare conversation partners' proficiency values for each language. Pick the language that has the highest low value. 
-
-# converse_in_max_proficiency <- function(agent_conversation_partners, pop = agent_census){
-#
-#   # Extract the relevant columns
-#   language_data <- pop %>%
-#     select(agent_id, contains("Language"))
-#
-#   ego <- agent_conversation_partners[1]
-#   alters <- agent_conversation_partners[-1]
-#
-#   spoken_ego <- vector("character", length(agent_conversation_partners))
-#   spoken_alter <- vector("character", length(agent_conversation_partners))
-#
-#
-
-# calc_highest_min_proficiency <- function(alter){
-#   for(lang in languages){ # for each language, return the min proficiency value in the conversant dyad.
-#    min_proficiency <- min(c(language_data[1, lang], language_data[which(language_data$agent_id == alter), lang]))
-#    if(min_proficiency > 20){ # but only if both partners have a proficiency value in this language > a monolingual two-year-old
-#      lang_match[lang] <- min_proficiency}
-#    else(lang_match[lang] <- max(c(language_data[1, lang], language_data[which(language_data$agent_id == alter), lang]))) # if at least one partner is an infant, select the strongest language of the other partner.
-#      names(lang_match[lang]) <- languages[lang]
-#
-#   }
-# converse_in <- names(lang_match[which(lang_match == max(lang_match))]) # list the names of the agents' shared languages with the highest min proficiency value
-# if(length(converse_in) > 1) converse_in <- sample(converse_in, size = 1) # if there's a tie among conversation partners for the language with the highest min proficiency, pick amongt the tied languages at random.
-# converse_in <- converse_in[!is.na(converse_in)]  # remove NAs (conversation partner was an infant who can't speak yet)
-# return(converse_in)
-# }
-#
+############################################################################
 
 
-#test <- sapply(alters, FUN = calc_highest_min_proficiency)
 
-
-# conversations = a character vector of agent IDs (like one of the vectors stored in the list 'conversants').
-# pop = agent_census, a data frame of agents and their traits
-# languages = a character vector naming the languages that exist in this simulation.
-# min_speaking_proficiency = a number (defaults to 1) that sets the proficiency threshold an agent must reach in a language in order to speak that language in an interaction with another agent. 
-
-select_language_of_conversation_max_proficiency <- function(conversations, pop = agent_census, languages, min_speaking_proficiency = 1) {
+sow_stationary <- function(n_births, agent_census){
+  fertile_myrtles <- subset(agent_census, female == 1 & 
+                              age >= 15 & age <= 49 &
+                              !is.na(spouse_id) &
+                              is.na(death_recorded))
+  # average annual probability of giving birth
+  # This equation determines the individual-level probability of giving birth based on the total number of fertile women and the total number of births needed to balance deaths and maintain population stationarity.
+  #  annual_birth_probability <- n_births / nrow(fertile_myrtles) 
+  if(nrow(fertile_myrtles) >= n_births){
+    new_moms <- data.frame(agent_id = sample(fertile_myrtles$agent_id, size = n_births, replace = F)) 
+    # If the number of children that must be born to maintain population stationarity is larger than the number of potential mothers, allow births of twins, triplets, etc. 
+  } else new_moms <- data.frame(agent_id = sample(fertile_myrtles$agent_id, size = n_births, replace = T)) 
   
-  speakers <- pop[pop$agent_id %in% conversations, c("agent_id", languages)]
+  new_parents <- left_join(new_moms, fertile_myrtles[,c("agent_id", "spouse_id")], by = "agent_id")
   
-  for (lang in languages) {
-    speakers[, lang] <- if_else(speakers[, lang] < min_speaking_proficiency, NA, speakers[, lang])
-  }
-  
-  # Determine preferred language (language of max proficiency) for each speaker
-  asymmetric_exchanges <- speakers[-1,] %>%
-    rowwise() %>%
-    mutate(max_proficiency = max(c_across(all_of(languages)), na.rm = TRUE),
-           preferred_languages = list(names(speakers[languages])[which(c_across(all_of(languages)) == max_proficiency)]),
-           preferred_language = NA)
-  for(i in 1:nrow(asymmetric_exchanges)){
-    if(length(asymmetric_exchanges$preferred_languages[[i]]) > 0){
- asymmetric_exchanges$preferred_language[i] = sample(asymmetric_exchanges$preferred_languages[[i]], 1)
+  return(new_parents)
+}
+
+test <- agent_census[which(agent_id %in% c())]
+
+### Adding a place_ID assignment to the birth_new_agents() function
+birth_new_agents <- function(agent_census, new_parents){
+  if(nrow(new_parents) > 0){
+    # Create a data frame with a single row of NA values
+    newborns <- data.frame(matrix(0, nrow = nrow(new_parents), ncol = ncol(agent_census)))
+    # Set the column names to match those of agent_census
+    colnames(newborns) <- colnames(agent_census)
+    
+    newborns$agent_id <- sapply(seq(from = max(as.numeric(substr(agent_census$agent_id, 4, nchar(agent_census$agent_id)))),
+                                    length.out = nrow(new_parents)), 
+                                generate_agent_id)
+    newborns$age <- 0
+    newborns$female <- sample(c(0,1), size = nrow(new_parents), replace = T)
+    newborns$spouse_id <- NA
+    newborns$mother_id <- new_parents$agent_id
+    newborns$father_id <- new_parents$spouse_id
+    newborns$death_recorded <- NA
+    if(any(names(agent_census) %in% "place_id")){
+    newborns$mom_place_id <- agent_census[which(agent_census$agent_id %in% new_parents$agent_id),]$place_id
+    newborns$dad_place_id <- agent_census[which(agent_census$agent_id %in% new_parents$spouse_id),]$place_id
+    newborns <- newborns %>%
+       rowwise %>%
+       mutate(
+         place_id = c_across(sample(c("mom_place_id", "dad_place_id"), 1))) %>%
+      select(-mom_place_id, -dad_place_id)
+      
     }
-    else{NA}
+    agent_census <- rbind(agent_census, newborns)
   }
-          
-           
-prof_match <- data.frame(agent_id = speakers$agent_id[-1])
-  
-  for (lang in languages) {
-    if (!is.na(speakers[1, lang])) {
-      prof_match[, lang] <- if_else(speakers[1, lang] < speakers[-1, lang], speakers[1, lang], speakers[-1, lang])
-    } else {
-      prof_match[, lang] <- NA
-    }
-  }
-  
-max_col_names <- apply(prof_match[languages], 1, function(row) {
-    if (sum(!is.na(row)) > 0) { # if both agents share at least one language
-      max_val <- max(row, na.rm = TRUE) # identify the language(s) with the maximum min proficiency between these agents
-      max_indices <- which(row == max_val)
-      if (length(max_indices) > 1) { # if their language of shared max proficiency is a tie,
-        sample(languages[max_indices], 1) #
-      } else {
-        languages[max_indices] # if there's only option, that's the language they speak
-      }
-    } else { #If agents don't share any languages, the preferred_language of the alter agent (other agent in the interaction) is sampled.
-      NA
-  }
-    })
-
-asymmetric_exchanges$max_col_names <- max_col_names
-
-asymmetric_exchanges <- asymmetric_exchanges %>%
-  mutate(language_of_conversation = if_else(!is.na(max_col_names), max_col_names, preferred_language)) 
-  
-  return(asymmetric_exchanges$language_of_conversation)
+  return(agent_census)
 }
 
 
 
 
 
-test <- select_language_of_conversation_max_proficiency(interactions[4,], pop = agent_census, languages, min_speaking_proficiency = 20)
 
+calc_dyad_age_and_place <- function(single_women, single_men, woman, man){
+  
+  # calculate age gap for the two individuals in question
+  age_gap <- single_men$age[man] - single_women$age[woman]
+  place_compatibility <- single_men$place_id[man] - single_women$place_id[woman]
+  # dyad compatibility = sum of the absolute value of the two agents' difference in age + abs value of difference in two agent's place ID. 
+  dyad_score <- abs(age_gap) + abs(place_compatibility) 
+  return(dyad_score)
+}
+
+dyad_scores <- matrix(NA, nrow = nrow(single_women), ncol = nrow(single_men))
+
+for(woman in 1:nrow(single_women)){
+  for(man in 1:nrow(single_men)){
+    
+    dyad_scores[woman,man] <- calc_dyad_age_and_place(single_women, single_men, woman, man)
+  }
+}
+rownames(dyad_scores) <- single_women$agent_id
+colnames(dyad_scores) <- single_men$agent_id
 
 
 

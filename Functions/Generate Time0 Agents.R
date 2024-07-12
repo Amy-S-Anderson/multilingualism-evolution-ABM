@@ -26,6 +26,12 @@
 # 2. assign age-appropriate proficiency values to each speaker
 # 3. This first version assumes that everyone is monolingual at Time = 0. 
 
+
+
+### Assign an Assortment ID:
+# This function needs to:
+# 1. 
+
 ########################################################################################
 
 
@@ -116,8 +122,8 @@ generate_age_structure <- function(n, mortality, years){
 
 #### Function to generate an age-structured starting population ####
 
-make_basic_population <- function(n_agents, age_distribution){
-  agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = n_agents), FUN = generate_agent_id))
+make_basic_population <- function(n_agents, age_distribution, id_start = 0){
+  agent_census <- data.frame(agent_id = sapply(seq(from = id_start, length.out = n_agents), FUN = generate_agent_id))
   
   # uniform age structure
   agent_census$age <- sample(age_distribution, size = n_agents, replace = TRUE)
@@ -153,8 +159,8 @@ make_basic_population <- function(n_agents, age_distribution){
 #### Function to assign language proficiencies to agents in starting population. ####
 
 # This function returns a population with an even number of monolingual speakers for each language in the population. No family relationships are yet specified, so children old enough to be speaking a language are assigned their language at random. 
-
-assign_starting_proficiency <- function(agent_census){
+# languages = a character vector of language names for which to assign starting proficiencies
+assign_starting_proficiency <- function(agent_census, languages){
   
   # function for effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
   age_factor <- function(age){
@@ -167,10 +173,7 @@ assign_starting_proficiency <- function(agent_census){
   proficiency_by_age <- data.frame(age,
                                    age_rate,
                                    proficiency = if_else(cumsum(age_rate) <= 100, cumsum(age_rate), 100))
-  languages <- agent_census %>%
-    select(starts_with("Language")) %>%
-    names()
-  
+
   # for each agent
   for(i in 1:nrow(agent_census)){
     language <- sample(languages, size = 1, replace = TRUE) # assign them a language at random

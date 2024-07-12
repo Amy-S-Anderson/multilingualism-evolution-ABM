@@ -32,6 +32,8 @@ library(tidyverse)
 
 # single_women and single_men are subsets of agent_census that are calculated inside the select_marriage_partners() function.
 # woman and man are index values for each of these respective subsets.
+
+# Consider only how similar the two agents are in age. 
 calc_dyad_age_similarity <- function(single_women, single_men, woman, man){
   
   # calculate age gap for the two individuals in question
@@ -40,6 +42,21 @@ calc_dyad_age_similarity <- function(single_women, single_men, woman, man){
   dyad_score <- abs(age_gap) # dyad compatibility = absolute value of the two agents' difference in age
   return(dyad_score)
 }
+
+
+# Consider age similarity AND constrain agents to marrying only people from their same location. 
+calc_dyad_age_and_place <- function(single_women, single_men, woman, man){
+  
+  # calculate age gap for the two individuals in question
+  age_gap <- single_men$age[man] - single_women$age[woman]
+  place_compatibility <- single_men$place_id[man] - single_women$place_id[woman]
+  # dyad compatibility = sum of the absolute value of the two agents' difference in age 
+  dyad_score <- if(place_compatibility == 0){
+    abs(age_gap)}
+  else{ NA } # if they aren't from the same place, make it impossible for them to get together
+  return(dyad_score)
+}
+
 
 
 ####### THIS FUNCTION DOESN'T WORK YET -- NEEDS PROFICIENCY SCORES IN THE LANGUAGE COLUMNS IN ORDER TO TEST IT. 
@@ -60,7 +77,7 @@ calc_dyad_age_similarity <- function(single_women, single_men, woman, man){
 # agent_census = data frame updated in each round t of model time. Contains columns for agent_id, sex, age, language proficiency in however many languages are in the model space, and spouse_id.
 # calculate_dyad_score = name of a function from the set of functions above. Choose the function that calculates marriage compatibility based on the marriage rules that you want to implement in this model run. 
 select_marriage_partners <- function(agent_census, calculate_dyad_score = calc_dyad_age_similarity){
-  
+    
   # subset unmarried folks
   singles <- agent_census %>%
     filter(is.na(spouse_id),
@@ -88,7 +105,7 @@ select_marriage_partners <- function(agent_census, calculate_dyad_score = calc_d
     dyad_lowest_score <- min(dyad_scores, na.rm = TRUE)
     dyad_lowest_score_index <- sample(which(dyad_scores == dyad_lowest_score), 1) # indexing from top left to bottom right
     dyad_lowest_score_column <- ceiling(dyad_lowest_score_index / nrow(single_women))
-    dyad_lowest_score_row <- dyad_lowest_score_index - nrow(single_women) * (dyad_lowest_score_column - 1)
+    dyad_lowest_score_row <- ceiling(dyad_lowest_score_index - nrow(single_women)) / (dyad_lowest_score_column - 1)
     dyad_scores[dyad_lowest_score_row, ] <- NA
     dyad_scores[, dyad_lowest_score_column] <- NA
   # get them hitched

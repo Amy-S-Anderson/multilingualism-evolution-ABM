@@ -108,6 +108,7 @@ select_language_of_conversation_at_random <- function(agent_conversation_partner
 # conversations = a vector of agent IDs in which the first entry is the focal agent and the following entries are all the agents who conversed with them in this round.
 # pop = agent_census, a data frame of agent IDs and agent characteristics, including proficiency values for each language in the simulation
 # languages = a global object, a character vector naming the languages at play in the simulation. 
+# min_speaking_proficiency = a global object, a number identifying the proficiency threshold that an agent must pass before they can speak a language that they are learning. 
 select_language_of_conversation_max_proficiency <- function(conversations, pop = agent_census){
   
   # set up speakers and their language proficiencies

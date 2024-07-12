@@ -83,25 +83,36 @@ sow <- function(tfr, agent_census){
 # new_mothers = the output of the sow() function above. 
 birth_new_agents <- function(agent_census, new_parents){
   if(nrow(new_parents) > 0){
-  # Create a data frame with a single row of NA values
-  newborns <- data.frame(matrix(0, nrow = nrow(new_parents), ncol = ncol(agent_census)))
-  # Set the column names to match those of agent_census
-  colnames(newborns) <- colnames(agent_census)
-  
-  newborns$agent_id <- sapply(seq(from = max(as.numeric(substr(agent_census$agent_id, 4, nchar(agent_census$agent_id)))),
-                                  length.out = nrow(new_parents)), 
-                              generate_agent_id)
-  newborns$age <- 0
-  newborns$female <- sample(c(0,1), size = nrow(new_parents), replace = T)
-  newborns$spouse_id <- NA
-  newborns$mother_id <- new_parents$agent_id
-  newborns$father_id <- new_parents$spouse_id
-  newborns$death_recorded <- NA
-  
-  agent_census <- rbind(agent_census, newborns)
+    # Create a data frame with a single row of NA values
+    newborns <- data.frame(matrix(0, nrow = nrow(new_parents), ncol = ncol(agent_census)))
+    # Set the column names to match those of agent_census
+    colnames(newborns) <- colnames(agent_census)
+    
+    newborns$agent_id <- sapply(seq(from = max(as.numeric(substr(agent_census$agent_id, 4, nchar(agent_census$agent_id)))),
+                                    length.out = nrow(new_parents)), 
+                                generate_agent_id)
+    newborns$age <- 0
+    newborns$female <- sample(c(0,1), size = nrow(new_parents), replace = T)
+    newborns$spouse_id <- NA
+    newborns$mother_id <- new_parents$agent_id
+    newborns$father_id <- new_parents$spouse_id
+    newborns$death_recorded <- NA
+    if(any(names(agent_census) %in% "place_id")){
+      newborns$place_id <- agent_census %>% filter(agent_id %in% new_parents$agent_id) %>% select(place_id)
+      # newborns$dad_place_id <- agent_census[which(agent_census$agent_id %in% new_parents$spouse_id),]$place_id
+      # newborns <- newborns %>%
+      #   rowwise %>%
+      #   mutate(
+      #     place_id = c_across(sample(c("mom_place_id", "dad_place_id"), 1))) %>%
+      #   select(-mom_place_id, -dad_place_id)
+      
+    }
+    agent_census <- rbind(agent_census, newborns)
   }
   return(agent_census)
 }
+
+
 
 
 ########################################################################################
