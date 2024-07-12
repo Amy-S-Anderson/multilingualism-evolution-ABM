@@ -30,6 +30,9 @@ agent_census <- make_basic_population(n_agents = 1000, age_distribution = initia
    # This function assumes an equal number of monolingual speakers for each local language and determines language proficiency by agent age.
     agent_census <- assign_starting_proficiency(agent_census)
   
+  ### Assign min proficiency threshold for being able to speak a language
+    min_speaking_proficiency <- 20
+  
    ### Initialize output table
     output <- as.data.frame(matrix(0, nrow = 0, ncol = ncol(agent_census)))
     names(output) <- names(agent_census)
