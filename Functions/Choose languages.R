@@ -48,7 +48,7 @@ languages <- choose_local_languages(3)
 
 #### Functions to define an agent's decision-making logic in choosing which language to speak in a given interaction ####
 
-# These function need to:
+# These functions need to:
 # 1. consider each conversational dyad according to the logic of decision-making laid out in the function.
 # 2. Return the language each agent chooses to speak in this interaction. 
 
@@ -104,38 +104,55 @@ select_language_of_conversation_at_random <- function(agent_conversation_partner
 # They select the language that maximizes shared proficiency
 # To do this, compare conversation partners' proficiency values for each language. Pick the language that has the highest low value. 
 
-# converse_in_max_proficiency <- function(agent_conversation_partners, pop = agent_census){
-#   
-#   # Extract the relevant columns
-#   language_data <- pop %>%
-#     select(agent_id, contains("Language"))
-#   
-#   ego <- agent_conversation_partners[1]
-#   alters <- agent_conversation_partners[-1]
-#   
-#   spoken_ego <- vector("character", length(agent_conversation_partners))
-#   spoken_alter <- vector("character", length(agent_conversation_partners))
-#   
-#   
+# This function is written for a single vector of agent IDs. Use an apply function to run this for all agent interactions. 
+# conversations = a vector of agent IDs in which the first entry is the focal agent and the following entries are all the agents who conversed with them in this round.
+# pop = agent_census, a data frame of agent IDs and agent characteristics, including proficiency values for each language in the simulation
+# languages = a global object, a character vector naming the languages at play in the simulation. 
+select_language_of_conversation_max_proficiency <- function(conversations, pop = agent_census){
   
-# calc_highest_min_proficiency <- function(alter){
-#   for(lang in languages){ # for each language, return the min proficiency value in the conversant dyad. 
-#    min_proficiency <- min(c(language_data[1, lang], language_data[which(language_data$agent_id == alter), lang])) 
-#    if(min_proficiency > 20){ # but only if both partners have a proficiency value in this language > a monolingual two-year-old
-#      lang_match[lang] <- min_proficiency} 
-#    else(lang_match[lang] <- max(c(language_data[1, lang], language_data[which(language_data$agent_id == alter), lang]))) # if at least one partner is an infant, select the strongest language of the other partner. 
-#      names(lang_match[lang]) <- languages[lang]
-#    
-#   }
-# converse_in <- names(lang_match[which(lang_match == max(lang_match))]) # list the names of the agents' shared languages with the highest min proficiency value
-# if(length(converse_in) > 1) converse_in <- sample(converse_in, size = 1) # if there's a tie among conversation partners for the language with the highest min proficiency, pick amongt the tied languages at random.  
-# converse_in <- converse_in[!is.na(converse_in)]  # remove NAs (conversation partner was an infant who can't speak yet)
-# return(converse_in)
-# }
-# 
-
-
-#test <- sapply(alters, FUN = calc_highest_min_proficiency)
+  # set up speakers and their language proficiencies
+  speakers <- pop[pop$agent_id %in% conversations, c ("agent_id", languages)] %>% # subset the language proficiencies for the agents named in 'conversations'
+    rowwise() %>% # for each agent
+    # identify their max proficiency value
+    mutate(max_proficiency = max(c_across(starts_with("Language")), na.rm = TRUE), 
+           # pull the names of the languages for which their proficiency value = their max proficiency (may be more than one language)
+           highest_proficiency_languages = list(names(.[,-1])[which(c_across(starts_with("Language")) == max_proficiency)]),
+           # identify the agent's preferred language
+           preferred_language = if (max_proficiency < min_speaking_proficiency) { # they can't speak anything if they haven't passed the min_speaking_proficiency threshold
+             NA
+           } else {
+             if (length(highest_proficiency_languages) == 1) {
+               highest_proficiency_languages
+             } else {
+               sample(highest_proficiency_languages, 1)
+             }
+           }
+    ) %>%
+    ungroup() 
+  
+  prof_match <- data.frame(agent_id = speakers$agent_id[-1]) # subset everyone but the focal agent
+  for (lang in languages) { # for each language
+    prof_match[, lang] <- if(speakers[1, lang] > min_speaking_proficiency){
+      if_else(speakers[-1, lang] > min_speaking_proficiency,  # if they can both speak the language
+              # replace their individual proficiency value with the minimum of c(their value, the focal agent's value)
+              if_else(as.numeric(speakers[1, lang]) < speakers[-1, lang], speakers[1, lang], speakers[-1, lang]),
+              NA) # if they don't speak the language, they can't have a matched min proficiency
+    } else { NA } }
+  
+  prof_match <- prof_match %>%
+    mutate(preferred_language = speakers$preferred_language[-1]) %>%
+    rowwise %>% # for each agent
+    # use the same logic as above in 'speakers' to identify the shared language that maximizes the minimum proficiency in each dyad
+    mutate(max_proficiency = max(c_across(starts_with("Language")), na.rm = TRUE),
+           highest_proficiency_languages = list(names(.[,-1])[which(c_across(starts_with("Language")) == max_proficiency)]),
+           # if the dyad doesn't speak any languages in common, each agent speaks their own preferred language (language of highest proficiency)
+           language_of_conversation = if(length(highest_proficiency_languages) > 0){sample(highest_proficiency_languages, 1)} else{
+             preferred_language
+           }) %>%
+    ungroup()
+  
+  return(prof_match$language_of_conversation)
+}
 
 
 

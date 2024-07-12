@@ -15,7 +15,8 @@
 ########################################################################################
 
 
-
+# agent_id, an index value identifying the position of the focal agent in the data set. 
+# interactions = a matrix of agent IDs, with the first column as the focal agent and each row as a sample of ten conversations with other agents
 
 record_conversations <- function(agent_id, interactions = interactions){
   agent_id <- interactions[agent_id, 1]
@@ -37,7 +38,23 @@ record_conversations <- function(agent_id, interactions = interactions){
 
 ########################################################################################
 
-
+# This function operates just like 'record_conversations()', but it includes the ego agent's ID as the first item in the vector of agent IDs. 
+list_interactions <- function(agent_id, interactions = interactions){
+  agent_id <- interactions[agent_id, 1]
+  # subset interaction matrix: only the rows that contain agent i. 
+  filtered_mat <- as.matrix(interactions[apply(interactions, 1, function(row) any(row == agent_id)), ]) # need to force this output into matrix form because it defaults to being a character vector if the ego agent isn't sampled in any of the alter rows, and then the next line throws an error when it's asked to subset a matrix (incorrect number of dimensions).
+  
+  # Extract all agent IDs from the row where the agent's ID appears in the first column (agent i's ego row)
+  ego_row <- filtered_mat[filtered_mat[, 1] == agent_id, ]
+  
+  # Extract all agent IDs from the first column, excluding the agent's own ID (agent i's appearance as an alter in other agents' ego rows)
+  alter_rows <- filtered_mat[filtered_mat[ ,1]!= agent_id, 1] ### agent ID row is NOT ALWAYS ONE
+  
+  # Combine the two sets of interacted agents
+  all_conversant_IDs <- c(ego_row, alter_rows)
+  
+  return(all_conversant_IDs)
+}
 
 
 #### Function to calculate each agent's level of exposure to each local language, relative to their exposure to the other local languages ####

@@ -1,13 +1,19 @@
 
 
+# Radical Egalitarian Multilingualism
+
+# This model scenario minimizes the number of structured choices in the model space. It keeps simplistic (and unrealistic) assumptions that:
+ # - agents don't mind what languages their spouse is able to speak, but prefer partners closer to their own age
+ # - agents choose which other agents to interact with by randomly sampling the other agents (with replacement)
+ # - each round of model time, each agent picks 10 conversations (perhaps fewer than 10 conversants, given sampling with replacement). 
+ # They may be named by other agents as well, so some agents will experience more than 10 conversations, but no one will experience < 10 conversations.
+ # - agents have no preference which language they choose to speak in any given interaction.
+ 
 
 
 
 
-
-
-
-
+#### SET UP MODEL SPACE #### 
 
 ####  - Designate languages in play. ####
 languages <- choose_local_languages(3)
@@ -68,7 +74,7 @@ start.time <- Sys.time()
         
         # -  Record which language each agent chooses to speak in each conversation:
         # Calculate a list of conversation languages heard by each agent
-        languages_of_conversation <- lapply(conversants, select_language_of_conversation)
+        languages_of_conversation <- lapply(conversants, select_language_of_conversation_at_random)
         
         # - Record each agent's relative frequency of exposure to each language in this year of conversations:
         relative_exposures <- lapply(languages_of_conversation, FUN = calculate_language_exposures)
