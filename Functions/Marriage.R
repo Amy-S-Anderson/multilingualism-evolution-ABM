@@ -8,6 +8,7 @@
 # 1. Calculate a compatibility score for each potential pair of partners. Different versions of this function will incorporate
   # partner Age similarity
   # partner language overlap
+  # partner geographic overlap
 
 # 2. Return a matrix of dyad compatibility values (lower = better)
 
@@ -26,9 +27,9 @@
 
 library(tidyverse)
 
+#### Marriage Rules: Choose the calculations for determining the marital compatibility between each possible pair of eligible singles.  ####
 
-
-#### Function: Calculate Dyad Compatibility Scores
+#### Functions: Calculate Dyad Compatibility Scores
 
 # single_women and single_men are subsets of agent_census that are calculated inside the select_marriage_partners() function.
 # woman and man are index values for each of these respective subsets.
@@ -38,20 +39,55 @@ calc_dyad_age_similarity <- function(single_women, single_men, woman, man){
   
   # calculate age gap for the two individuals in question
   age_gap <- single_men$age[man] - single_women$age[woman]
-  
-  dyad_score <- abs(age_gap) # dyad compatibility = absolute value of the two agents' difference in age
+  # dyad compatibility = absolute value of the two agents' difference in age, but spousal age gaps of more than 20 years are not allowed. 
+  dyad_score <- if(abs(age_gap) < 20){ 
+    abs(age_gap)
+  } else{NA} 
   return(dyad_score)
 }
 
 
-# Consider age similarity AND constrain agents to marrying only people from their same location. 
+### Consider age similarity AND require agents to share a language of max proficiency
+calc_dyad_age_language_max <- function(single_women, single_men, woman, man, proficiency_threshold = 100){
+  
+  # calculate age gap for the two individuals in question
+  age_gap <- single_men$age[man] - single_women$age[woman]
+  woman_max_proficiency = languages[which(single_women[woman, languages] == max(single_women[woman, languages]))]
+  man_max_proficiency = languages[which(single_men[man, languages] == max(single_men[man, languages]))]
+  
+  if(woman_max_proficiency %in% man_max_proficiency){
+    dyad_score <- abs(age_gap) 
+  } else{ dyad_score <- NA }
+  
+  return(dyad_score)
+}
+
+
+
+### Consider age similarity AND require agents to share a spoken language.
+# required proficiency threshold to consider a language a shared language defaults to the minimum speaking proficiency, but can be adjusted. 
+calc_dyad_age_language_shared <- function(single_women, single_men, woman, man, proficiency_threshold = min_speaking_proficiency){
+  # calculate age gap for the two individuals in question
+  age_gap <- single_men$age[man] - single_women$age[woman]
+  woman_speaks = languages[which(single_women[woman, languages] > proficiency_threshold)]
+  man_speaks = languages[which(single_men[man, languages] > proficiency_threshold)]
+  
+  dyad_score <- if(woman_speaks %in% man_speaks){
+    abs(age_gap) 
+  } else{ NA }
+  return(dyad_score)
+}
+
+
+
+### Consider age similarity AND constrain agents to marrying only people from their same location. 
 calc_dyad_age_and_place <- function(single_women, single_men, woman, man){
   
   # calculate age gap for the two individuals in question
   age_gap <- single_men$age[man] - single_women$age[woman]
-  place_compatibility <- single_men$place_id[man] - single_women$place_id[woman]
+  place_compatibility <- single_men$place_id[man] == single_women$place_id[woman]
   # dyad compatibility = sum of the absolute value of the two agents' difference in age 
-  dyad_score <- if(place_compatibility == 0){
+  dyad_score <- if(place_compatibility){
     abs(age_gap)}
   else{ NA } # if they aren't from the same place, make it impossible for them to get together
   return(dyad_score)
@@ -59,24 +95,13 @@ calc_dyad_age_and_place <- function(single_women, single_men, woman, man){
 
 
 
-####### THIS FUNCTION DOESN'T WORK YET -- NEEDS PROFICIENCY SCORES IN THE LANGUAGE COLUMNS IN ORDER TO TEST IT. 
-# calc_dyad_age_language1 <- function(single_women, single_men, woman, man, proficiency_threshold = 100){
-#   
-#   # calculate age gap for the two individuals in question
-#   age_gap <- single_men$age[man] - single_women$age[woman]
-#   shared_language <- if(colnames(single_men[man, which(language >= proficiency_threshold)] == single_women$agent_id[woman] & single_men[man, language] > x), "yes", "no") ### this definitely doesn't work. come back to this. 
-# 
-#   
-#   dyad_score <- abs(age_gap) + shared_language # dyad compatibility = absolute value of the two agents' difference in age
-#   return(dyad_score)
-# }
-# 
 
 #### Function: Select Marriage Partners
 
 # agent_census = data frame updated in each round t of model time. Contains columns for agent_id, sex, age, language proficiency in however many languages are in the model space, and spouse_id.
 # calculate_dyad_score = name of a function from the set of functions above. Choose the function that calculates marriage compatibility based on the marriage rules that you want to implement in this model run. 
-select_marriage_partners <- function(agent_census, calculate_dyad_score = calc_dyad_age_similarity){
+
+select_marriage_partners <- function(agent_census, calculate_dyad_score){
     
   # subset unmarried folks
   singles <- agent_census %>%
@@ -87,6 +112,7 @@ select_marriage_partners <- function(agent_census, calculate_dyad_score = calc_d
   
   
   if(nrow(single_women) > 0 & nrow(single_men) > 0){
+    
   # set up empty matrix ready to populate with dyad compatibility scores
   dyad_scores <- matrix(NA, nrow = nrow(single_women), ncol = nrow(single_men))
 
@@ -99,15 +125,26 @@ select_marriage_partners <- function(agent_census, calculate_dyad_score = calc_d
     rownames(dyad_scores) <- single_women$agent_id
     colnames(dyad_scores) <- single_men$agent_id
   
-  
+    
+  # Check that anyone is potentially compatible
+    for (i in 1:min(nrow(single_men), nrow(single_women))) {
+      valid_scores <- dyad_scores[!is.na(dyad_scores)]
+      if (length(valid_scores) == 0) {
+        break
+      }
   # identify the most compatible couples
-  for (i in 1:min(nrow(single_men), nrow(single_women))) {
-    dyad_lowest_score <- min(dyad_scores, na.rm = TRUE)
-    dyad_lowest_score_index <- sample(which(dyad_scores == dyad_lowest_score), 1) # indexing from top left to bottom right
-    dyad_lowest_score_column <- ceiling(dyad_lowest_score_index / nrow(single_women))
-    dyad_lowest_score_row <- ceiling(dyad_lowest_score_index - nrow(single_women)) / (dyad_lowest_score_column - 1)
+      dyad_lowest_score <- min(dyad_scores, na.rm = TRUE)
+      dyad_lowest_score_index <- which(dyad_scores == dyad_lowest_score, arr.ind = TRUE)
+      if (length(dyad_lowest_score_index) == 0) {
+        break
+      }
+      dyad_lowest_score_index <- dyad_lowest_score_index[1, , drop = FALSE]
+      dyad_lowest_score_row <- dyad_lowest_score_index[1,1]
+      dyad_lowest_score_column <- dyad_lowest_score_index[1,2]
+  # Mark these agents as no longer available for pairing  
     dyad_scores[dyad_lowest_score_row, ] <- NA
     dyad_scores[, dyad_lowest_score_column] <- NA
+    
   # get them hitched
     paired_woman <- single_women[dyad_lowest_score_row,]$agent_id
     paired_man <- single_men[dyad_lowest_score_column,]$agent_id
@@ -119,8 +156,6 @@ select_marriage_partners <- function(agent_census, calculate_dyad_score = calc_d
   return(agent_census)
 
 }
-
-
 
 
 
