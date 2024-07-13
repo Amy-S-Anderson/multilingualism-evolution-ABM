@@ -4,6 +4,30 @@
 ############ TEST FILE ################
 
 
+####  - Designate languages in play. ####
+languages <- choose_local_languages(3)
+
+#### - Designate the mortality hazard for the population ####
+# choose the Siler model parameter values for the mortality regime your agents will experience.
+CDW15 <- data.frame(a1 = 0.175, b1 = 1.4, a2 = 0.00368, a3 = 0.000075, b3 = 0.0917)
+
+####  - Generate a starting set of agents, and their age structure ####
+initial_ages <- read.csv("starting_age_structure.csv")
+agent_census <- make_basic_population(n_agents = 1000, age_structure = initial_ages$initial_ages) %>%
+  assign_starting_proficiency(languages = languages) %>%
+  mutate(place_id = c(rep(1,500), rep(2,500)))
+
+
+
+### Assign initial languages proficiencies for agents at Time 0
+# This function assumes an equal number of monolingual speakers for each local language and determines language proficiency by agent age.
+test_census <- assign_starting_proficiency(agent_census)
+write.csv(test_census, file = "starting_agents_for_test_file.csv")
+
+
+
+
+
 # function for effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
 age_factor <- function(age){
   params <- data.frame(d = 18, a = 0.5, r0 = 9)
@@ -280,6 +304,53 @@ for(woman in 1:nrow(single_women)){
 }
 rownames(dyad_scores) <- single_women$agent_id
 colnames(dyad_scores) <- single_men$agent_id
+
+
+
+####### THIS FUNCTION DOESN'T WORK YET -- NEEDS PROFICIENCY SCORES IN THE LANGUAGE COLUMNS IN ORDER TO TEST IT. 
+calc_dyad_age_language_max <- function(single_women, single_men, woman, man, proficiency_threshold = 100){
+  
+  # calculate age gap for the two individuals in question
+  age_gap <- single_men$age[man] - single_women$age[woman]
+  woman_max_proficiency = languages[which(single_women[woman, languages] == max(single_women[woman, languages]))]
+  man_max_proficiency = languages[which(single_men[man, languages] == max(single_men[man, languages]))]
+  
+ if(woman_max_proficiency %in% man_max_proficiency){
+   dyad_score <- abs(age_gap) 
+ } else{ NA }
+
+    return(dyad_score)
+}
+
+
+
+calc_dyad_age_language_shared <- function(single_women, single_men, woman, man, proficiency_threshold = min_speaking_proficiency){
+  # calculate age gap for the two individuals in question
+  age_gap <- single_men$age[man] - single_women$age[woman]
+  woman_speaks = languages[which(single_women[woman, languages] > proficiency_threshold)]
+  man_speaks = languages[which(single_men[man, languages] > proficiency_threshold)]
+  
+  if(woman_speaks %in% man_speaks){
+    dyad_score <- abs(age_gap) 
+  } else{ NA }
+  return(dyad_score)
+}
+
+test <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_language_max)
+
+
+
+
+
+#### Check spousal age gap ####
+agent_census_with_spouse_age <- agent_census %>%
+  left_join(agent_census, by = c("spouse_id" = "agent_id"), suffix = c("", "_spouse"))
+
+# Calculate the age gap
+agent_census_with_spouse_age <- agent_census_with_spouse_age %>%
+  mutate(age_gap = abs(age - age_spouse))
+
+
 
 
 
