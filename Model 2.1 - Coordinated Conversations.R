@@ -25,13 +25,19 @@ languages <- choose_local_languages(3)
 # choose the Siler model parameter values for the mortality regime your agents will experience.
 CDW15 <- data.frame(a1 = 0.175, b1 = 1.4, a2 = 0.00368, a3 = 0.000075, b3 = 0.0917)
 
+#### - Designate the marriage compatibility rules for the population ####
+make_matches <- calc_dyad_age_and_place
+
 ####  - Generate a starting set of agents, and their age structure ####
-initial_ages <- generate_age_structure(n = 10000, mortality = CDW15, years = 300) # this line will take a few minutes to run.
-agent_census <- make_basic_population(n_agents = 1000, age_distribution = initial_ages)
+# initial_ages <- generate_age_structure(n = 1000, mortality = CDW15, years = 300) # this line will take a few minutes to run.
+# initial_ages <- as.data.frame(initial_ages)
+# write.csv(initial_ages, file = "starting_age_structure.csv")
+initial_ages <- read.csv("starting_age_structure.csv")
+agent_census <- make_basic_population(n_agents = 1000, age_distribution = initial_ages$initial_ages)
 
 ### Assign initial languages proficiencies for agents at Time 0
 # This function assumes an equal number of monolingual speakers for each local language and determines language proficiency by agent age.
-agent_census <- assign_starting_proficiency(agent_census)
+agent_census <- assign_starting_proficiency(agent_census, languages = languages)
 
 ### Assign min proficiency threshold for being able to speak a language
 min_speaking_proficiency <- 20
@@ -54,7 +60,8 @@ for(i in seq(tmax)){
   agent_census <- agent_census[which(is.na(agent_census$death_recorded)),]
   
   #  Pair up males/females for reproductive partnerships:
-  agent_census <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_similarity)
+  agent_census$place_id <- c(rep(1,500), rep(2,500))
+  test <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_and_place)
   
   deaths <- reap(agent_census, mortality_regime = CDW15)
   turnover <- deaths$pop_turnover
