@@ -354,6 +354,58 @@ agent_census_with_spouse_age <- agent_census_with_spouse_age %>%
 
 
 
+##########################################################################################################
+
+#### Adding Assortment arguments to the select_conversation_partners() function ####
+
+
+# parent_weight = a numeric value. Default = 1, indicating that each agent's probability of interacting with a parent is equivalent to their probability of interacting with any other agent. 
+# peer weight = like parent weight, but scaled for age similarity.
+
+# When both parent_weight and peer_weight are set to 1 (the default values), agents interact with each other at random. 
+select_conversation_partners <- function(agent_census, assort_by = place_id, assort_prob = 1){ ### Do I want to add an argument for peer preference (age homophily)? 
+  
+  # empty matrix of agent-agent interactions to be populated in this round of model time t. 
+  interactions <- matrix(NA, nrow(agent_census), 11)
+  
+  # fill out the interaction matrix
+  for (i in seq(agent_census$agent_id)){  
+    ego <- agent_census$agent_id[i]
+    ego_parents <- agent_census[which(agent_census$agent_id %in% c(agent_census$mother_id[i], agent_census$father_id[i])),]$agent_id
+    alters <- agent_census[which(agent_census$agent_id != ego),]$agent_id
+    
+    parent_weighting <- if_else(alters %in% ego_parents, parent_weight, 1) #
+    peer_weighting <- 1 # This doesn't do anything yet, but it's ready to be filled out with an if_else statement that returns a vector of interaction probability weights scaled by the ego agent's age similarity to each alter agent. 
+    # each agent is exposed to 10 speech interactions, possibly repeats with the same person. 
+    # each agent gets to be the ego for 10 interactions, but they will likely show up as an alter in another agent's ego row. As a result, agents experience a minimum of 10 conversations, but may experience many more. 
+    conversants <- sample(alters, size = 10, replace = TRUE, prob = (parent_weighting * peer_weighting))
+    interactions[i,] <- c(ego, conversants)
+  }
+  return(interactions)
+}
+
+
+
+
+#############################################################################################################
+
+
+# Build a flexible marriage compatibility function with different argument options for the dyad compatibility calculation
+
+calc_dyad_score <- function(single_women, single_men, woman, man,
+                            ideal_age_gap = 0, # ideal spousal age gap. Defaults to zero. 
+                            shared_max_proficiency
+)
+  # calculate age gap for the two individuals in question
+  age_diff <- single_men$age[man] - single_women$age[woman]
+# dyad compatibility = absolute value of the two agents' difference in age, but spousal age gaps of more than 20 years are not allowed. 
+dyad_score <- if(abs(age_diff) < 20){ 
+  abs(age_diff) - abs(ideal_age_gap) # right now this isn't a sex-specific age gap. 
+} else{NA} 
+
+
+##############################################################################################################
+
 
 ##### TEST RUN TIME ####
 start.time <- Sys.time()

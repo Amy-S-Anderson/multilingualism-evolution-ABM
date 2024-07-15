@@ -34,6 +34,7 @@ library(tidyverse)
 # single_women and single_men are subsets of agent_census that are calculated inside the select_marriage_partners() function.
 # woman and man are index values for each of these respective subsets.
 
+
 # Consider only how similar the two agents are in age. 
 calc_dyad_age_similarity <- function(single_women, single_men, woman, man){
   

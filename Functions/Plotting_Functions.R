@@ -15,3 +15,8 @@ pop_size_table
 ggplot(pop_size_table, aes(x = year, y = pop_count)) +
   geom_line()
 }
+
+
+
+
+
