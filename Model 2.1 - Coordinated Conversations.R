@@ -17,53 +17,47 @@
 
 
 #### SET UP MODEL SPACE #### 
-
-####  - Designate languages in play. ####
-languages <- choose_local_languages(3)
-
 #### - Designate the mortality hazard for the population ####
 # choose the Siler model parameter values for the mortality regime your agents will experience.
 CDW15 <- data.frame(a1 = 0.175, b1 = 1.4, a2 = 0.00368, a3 = 0.000075, b3 = 0.0917)
-
-#### - Designate the marriage compatibility rules for the population ####
-make_matches <- calc_dyad_age_and_place
 
 ####  - Generate a starting set of agents, and their age structure ####
 # initial_ages <- generate_age_structure(n = 1000, mortality = CDW15, years = 300) # this line will take a few minutes to run.
 # initial_ages <- as.data.frame(initial_ages)
 # write.csv(initial_ages, file = "starting_age_structure.csv")
 initial_ages <- read.csv("starting_age_structure.csv")
-agent_census <- make_basic_population(n_agents = 1000, age_distribution = initial_ages$initial_ages)
-
-### Assign initial languages proficiencies for agents at Time 0
-# This function assumes an equal number of monolingual speakers for each local language and determines language proficiency by agent age.
-agent_census <- assign_starting_proficiency(agent_census, languages = languages)
-
-### Assign min proficiency threshold for being able to speak a language
-min_speaking_proficiency <- 20
-
-### Initialize output table
-output <- as.data.frame(matrix(0, nrow = 0, ncol = ncol(agent_census)))
-names(output) <- names(agent_census)
-
-#### Set years of model run time. ####
-tmax = 100
 
 
-start.time <- Sys.time()
 
-for(i in seq(tmax)){
-  print(i) # Loop Counter will appear in the console to let you know how the model run is progressing. 
+#### DEFINE THE MODEL FUNCTION #### 
+run_model <- function(pop_size, # number of agents 
+                          n_languages, # number of languages 
+                          mortality_hazard, # df of siler function parameter values
+                          min_speaking_proficiency, ### Assign min proficiency threshold for being able to speak a language
+                          years #### Set years of model run time. ####
+                          ){ 
+  ####  - Designate languages in play. ####
+  languages <- choose_local_languages(N_LANGUAGES)
+  agent_census <- make_basic_population(n_agents = pop_size, age_distribution = initial_ages$initial_ages)
+  ### Assign initial languages proficiencies for agents at Time 0
+  # This function assumes an equal number of monolingual speakers for each local language and determines language proficiency by agent age.
+  agent_census <- assign_starting_proficiency(agent_census, languages = languages)
+    
+    ### Initialize output table
+    output <- as.data.frame(matrix(0, nrow = 0, ncol = ncol(agent_census)))
+    names(output) <- names(agent_census)
+    
+  for(year in seq(years)){
+   # print(i) # Loop Counter will appear in the console to let you know how the model run is progressing. 
   
   #### DEMOGRAPHY ####
   # Calculate number of deaths there will be this year based on age structure of population.
-  agent_census <- agent_census[which(is.na(agent_census$death_recorded)),]
+  agent_census <- agent_census[which(is.na(agent_census$death_recorded)),] %>%
   
   #  Pair up males/females for reproductive partnerships:
-  agent_census$place_id <- c(rep(1,500), rep(2,500))
-  test <- select_marriage_partners(agent_census, calculate_dyad_score = calc_dyad_age_and_place)
+  select_marriage_partners(calculate_dyad_score = calc_dyad_age_similarity)
   
-  deaths <- reap(agent_census, mortality_regime = CDW15)
+  deaths <- reap(agent_census, mortality_regime = mortality_hazard)
   turnover <- deaths$pop_turnover
   # Record this year's deaths
   agent_census <- deaths$agent_census
@@ -103,15 +97,38 @@ for(i in seq(tmax)){
   agent_census <- learn_languages(language_exposures = agent_language_exposures, pop = agent_census)
   
   # record the year
-  agent_census$year <- i
+  agent_census$year <- year
   
   # add the census for this year to the running total of data output
   output <- rbind(output, agent_census)
   # Repeat all of this living for the next value of time t.
   
-}
+  }
+    return(output)
+ }
+  
 
 
+
+####  RUN THE MODEL #### 
+iterations <- lapply(seq(runs), function(x) run_model(pop_size = 50, # number of agents 
+                                               n_languages = 3, # number of languages 
+                                               mortality_hazard = CDW15, # df of siler function parameter values
+                                               min_speaking_proficiency = 20, 
+                                               years = 10))
+
+iterations <- mapply(cbind, res, run=seq(runs), SIMPLIFY=F) # add a column for the iteration number
+
+#### OUTPUT ####  
+final_output <- do.call(rbind, iterations)
+
+
+
+
+
+
+
+start.time <- Sys.time()
 end.time <- Sys.time()
 time.taken <- round(end.time - start.time,2)
 time.taken    
