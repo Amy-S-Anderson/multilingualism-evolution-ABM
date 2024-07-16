@@ -92,11 +92,8 @@ run_model <- function(N_LANGUAGES, # number of languages
     
     # - Record each agent's relative frequency of exposure to each language in this year of conversations:
     relative_exposures <- lapply(languages_of_conversation, FUN = calculate_language_exposures)
-    
-    # 
-    agent_language_exposures <- as.data.frame(matrix(unlist(relative_exposures), ncol = 3))
-    colnames(agent_language_exposures) <- languages
-    
+    agent_language_exposures <- t(do.call(cbind, relative_exposures))
+
     ### *Learn Languages!*
     # - Increase each agent's language proficiency in the population languages as a function of:
     #   1. their exposure to the language
@@ -118,13 +115,24 @@ run_model <- function(N_LANGUAGES, # number of languages
 
 
 ####  RUN THE MODEL #### 
-RUNS = 10
 start.time <- Sys.time()
-iterations <- lapply(seq(RUNS), function(x) run_model(POP_SIZE = 1000, # number of agents 
+run1 <- run_model(POP_SIZE = 1000, # number of agents 
+          N_LANGUAGES = 3, # number of languages 
+          MORTALITY_HAZARD = CDW15, # df of siler function parameter values
+          MIN_SPEAKING_PROFICIENCY = 20, 
+          YEARS = 200)
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time,2)
+time.taken  
+
+
+RUNS = 2
+start.time <- Sys.time()
+iterations <- lapply(seq(RUNS), function(x) run_model(POP_SIZE = 50, # number of agents 
                                                       N_LANGUAGES = 3, # number of languages 
                                                       MORTALITY_HAZARD = CDW15, # df of siler function parameter values
                                                       MIN_SPEAKING_PROFICIENCY = 20, 
-                                                      YEARS = 200))
+                                                      YEARS = 10))
 iterations <- mapply(cbind, iterations, run=seq(RUNS), SIMPLIFY=F) # add a column for the iteration number
 
 #### OUTPUT ####  
