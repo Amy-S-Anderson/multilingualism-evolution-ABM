@@ -231,7 +231,7 @@ plot_grid(all_speakers_plot, over10_speakers_plot, ncol = 1)
 Plot proficiency trajectories across the timeframe of the model:
 ```{r}
 # make data long data for plotting.
-longdata <- output %>%
+longdata <- run1 %>%
    pivot_longer(cols = languages, names_to = "Language", values_to = "Proficiency")
 
 

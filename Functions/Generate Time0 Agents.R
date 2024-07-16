@@ -168,7 +168,7 @@ assign_starting_proficiency <- function(agent_census, languages){
     params$r0 * (1 - (1 / (1 + exp(-params$a * (age - params$tc - params$d))))) + 0.5
   }
   
-  age = sort(unique(agent_census$age))
+  age = 0:120
   age_rate = sapply(age, FUN = age_factor)
   proficiency_by_age <- data.frame(age,
                                    age_rate,

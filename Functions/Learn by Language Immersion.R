@@ -119,11 +119,36 @@ learn_languages <- function(language_exposures, pop = agent_census, pop_language
   age_rate <- params$r0 * (1 - (1 / (1 + exp(-params$a * (ages - params$tc - params$d))))) + 0.5
   
   # Update language proficiencies in a vectorized way
+  age_rates_for_population <- age_rate[pop$age + 1]  # Adding 1 to match R's 1-based indexing
+  
   for (i in seq_along(pop_languages)) {
     lang <- pop_languages[i]
-    age_rates_for_population <- age_rate[pop$age + 1]
-    pop[[lang]] <- pmin(pop[[lang]] + age_rates_for_population * language_exposures[, i], 100)
+    pop[[lang]] <- pmin(pop[[lang]] + (age_rates_for_population * language_exposures[, i]), 100)
   }
   
   return(pop)
+}
+
+test <- learn_languages(agent_language_exposures, pop = agent_census)
+
+
+
+learn_languages <- function(language_exposures = agent_language_exposures, pop = agent_census, pop_languages = languages){
+  
+  # effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
+  ages = seq(from = 0, to = 120, by = 1)
+  params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
+  age_factor <-  params$r0 * (1 - (1 / (1 + exp(-params$a * (age - params$tc - params$d))))) + 0.5
+  age_rate <- ages * age_factor
+  
+  for(lang in pop_languages){
+    pop[,lang] <- pop[,lang] +  # current language proficiency
+      age_rate[pop$age + 1] * language_exposures[lang] # newly gained language proficiency
+    
+    pop[,lang] <- case_when(pop[,lang] > 100 ~ 100, # set a proficiency ceiling at 100
+                            TRUE ~ as.numeric(pop[,lang]))
+  }
+  
+  return(pop)
+  
 }

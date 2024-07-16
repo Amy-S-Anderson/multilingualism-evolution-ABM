@@ -31,7 +31,7 @@
 # choose the Siler model parameter values for the mortality regime your agents will experience.
 CDW15 <- data.frame(a1 = 0.175, b1 = 1.4, a2 = 0.00368, a3 = 0.000075, b3 = 0.0917)
 
-
+POP_SIZE = 100
 
 #### DEFINE THE MODEL FUNCTION #### 
 run_model <- function(N_LANGUAGES, # number of languages 
@@ -46,7 +46,7 @@ run_model <- function(N_LANGUAGES, # number of languages
   agent_census <- make_basic_population(n_agents = POP_SIZE, age_distribution = initial_ages) %>% # initial_ages is a vector in the global environment. See the Make file for details. 
   #### Assign initial languages proficiencies for agents at Time 0 ####
   # This function assumes an equal number of monolingual speakers for each local language and determines language proficiency by agent age.
-            assign_starting_proficiency( languages = languages)
+            assign_starting_proficiency(languages = languages)
   
   ### Initialize output table
   output <- as.data.frame(matrix(0, nrow = 0, ncol = ncol(agent_census)))
@@ -81,10 +81,10 @@ run_model <- function(N_LANGUAGES, # number of languages
     #### SOCIAL LEARNING ####
     # - Pick conversation partners for the year.
     # This function assigns partners by sampling at random, with replacement. Each agent will experience a minimum of 10 conversations.
-    interactions <- select_conversation_partners(agent_census)
+    interactions <- select_conversation_partners(agent_census[which(is.na(agent_census$death_recorded)),])
     
     # - Now that the interaction matrix for this round is generated, Count up the number of interactions each agent has had.
-    conversants <- sapply(seq(agent_census$agent_id), list_interactions, interactions)
+    conversants <- sapply(seq(agent_census[which(is.na(agent_census$death_recorded)),]$agent_id), list_interactions, interactions)
     
     # -  Record which language each agent chooses to speak in each conversation:
     # Calculate a list of conversation languages heard by each agent
@@ -98,7 +98,7 @@ run_model <- function(N_LANGUAGES, # number of languages
     # - Increase each agent's language proficiency in the population languages as a function of:
     #   1. their exposure to the language
     #   2. their age at time of exposure t.
-    agent_census <- learn_languages(language_exposures = agent_language_exposures, pop = agent_census)
+    agent_census[which(is.na(agent_census$death_recorded)),] <- learn_languages(language_exposures = agent_language_exposures, pop = agent_census[which(is.na(agent_census$death_recorded)),])
     
     # record the year
     agent_census$year <- year
@@ -116,17 +116,17 @@ run_model <- function(N_LANGUAGES, # number of languages
 
 ####  RUN THE MODEL #### 
 start.time <- Sys.time()
-run1 <- run_model(POP_SIZE = 1000, # number of agents 
+run1 <- run_model(POP_SIZE = 50, # number of agents 
           N_LANGUAGES = 3, # number of languages 
           MORTALITY_HAZARD = CDW15, # df of siler function parameter values
           MIN_SPEAKING_PROFICIENCY = 20, 
-          YEARS = 200)
+          YEARS = 100)
 end.time <- Sys.time()
 time.taken <- round(end.time - start.time,2)
 time.taken  
 
 
-RUNS = 2
+RUNS = 10
 start.time <- Sys.time()
 iterations <- lapply(seq(RUNS), function(x) run_model(POP_SIZE = 50, # number of agents 
                                                       N_LANGUAGES = 3, # number of languages 

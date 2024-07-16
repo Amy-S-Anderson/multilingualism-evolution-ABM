@@ -21,7 +21,11 @@
 # choose the Siler model parameter values for the mortality regime your agents will experience.
 CDW15 <- data.frame(a1 = 0.175, b1 = 1.4, a2 = 0.00368, a3 = 0.000075, b3 = 0.0917)
 
-
+POP_SIZE = 1000, # number of agents 
+N_LANGUAGES = 3, # number of languages 
+MORTALITY_HAZARD = CDW15, # df of siler function parameter values
+MIN_SPEAKING_PROFICIENCY = 20, 
+YEARS = 200
 
 #### DEFINE THE MODEL FUNCTION #### 
 run_model <- function(N_LANGUAGES, # number of languages 

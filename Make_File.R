@@ -45,3 +45,18 @@ initial_ages <- as.numeric(read_lines(file = "CDW15_age_structure.txt")) # read_
 
 
 
+
+select_language_of_conversation_at_random <- function(agent_conversation_partners, pop = agent_census,
+                                                      min_speaking_proficiency = MIN_SPEAKING_PROFICIENCY){
+  
+  # Extract the relevant columns once
+  language_data <- pop[pop$agent_id %in% agent_conversation_partners, c ("agent_id", languages)] %>%
+    pivot_longer(cols = starts_with("Language"), names_to = "can_speak", values_to = "proficiency") %>%
+    filter(proficiency > min_speaking_proficiency) %>%
+    group_by(agent_id) %>%
+    summarise(spoken = if(n() > 0) sample(can_speak, size = 1))
+  
+  return(language_data$spoken)
+}
+
+
