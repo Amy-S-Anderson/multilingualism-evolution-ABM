@@ -87,7 +87,7 @@ select_language_of_conversation_at_random <- function(agent_conversation_partner
   # Extract the relevant columns once
   language_data <- pop[pop$agent_id %in% agent_conversation_partners, c ("agent_id", languages)] %>%
     pivot_longer(cols = starts_with("Language"), names_to = "can_speak", values_to = "proficiency") %>%
-    filter(proficiency > 20) %>%
+    filter(proficiency > MIN_SPEAKING_PROFICIENCY) %>%
     group_by(agent_id) %>%
     summarise(spoken = if(n() > 0) sample(can_speak, size = 1))
   
@@ -108,7 +108,7 @@ select_language_of_conversation_at_random <- function(agent_conversation_partner
 # conversations = a vector of agent IDs in which the first entry is the focal agent and the following entries are all the agents who conversed with them in this round.
 # pop = agent_census, a data frame of agent IDs and agent characteristics, including proficiency values for each language in the simulation
 # languages = a global object, a character vector naming the languages at play in the simulation. 
-# min_speaking_proficiency = a global object, a number identifying the proficiency threshold that an agent must pass before they can speak a language that they are learning. 
+# MIN_SPEAKING_PROFICIENCY = a global object, a number identifying the proficiency threshold that an agent must pass before they can speak a language that they are learning. 
 select_language_of_conversation_max_proficiency <- function(conversations, pop = agent_census){
   
   # set up speakers and their language proficiencies
@@ -119,7 +119,7 @@ select_language_of_conversation_max_proficiency <- function(conversations, pop =
            # pull the names of the languages for which their proficiency value = their max proficiency (may be more than one language)
            highest_proficiency_languages = list(names(.[,-1])[which(c_across(starts_with("Language")) == max_proficiency)]),
            # identify the agent's preferred language
-           preferred_language = if (max_proficiency < min_speaking_proficiency) { # they can't speak anything if they haven't passed the min_speaking_proficiency threshold
+           preferred_language = if (max_proficiency < MIN_SPEAKING_PROFICIENCY) { # they can't speak anything if they haven't passed the min_speaking_proficiency threshold
              NA
            } else {
              if (length(highest_proficiency_languages) == 1) {
@@ -133,8 +133,8 @@ select_language_of_conversation_max_proficiency <- function(conversations, pop =
   
   prof_match <- data.frame(agent_id = speakers$agent_id[-1]) # subset everyone but the focal agent
   for (lang in languages) { # for each language
-    prof_match[, lang] <- if(speakers[1, lang] > min_speaking_proficiency){
-      if_else(speakers[-1, lang] > min_speaking_proficiency,  # if they can both speak the language
+    prof_match[, lang] <- if(speakers[1, lang] > MIN_SPEAKING_PROFICIENCY){
+      if_else(speakers[-1, lang] > MIN_SPEAKING_PROFICIENCY,  # if they can both speak the language
               # replace their individual proficiency value with the minimum of c(their value, the focal agent's value)
               if_else(as.numeric(speakers[1, lang]) < speakers[-1, lang], speakers[1, lang], speakers[-1, lang]),
               NA) # if they don't speak the language, they can't have a matched min proficiency
