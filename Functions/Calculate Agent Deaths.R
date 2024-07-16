@@ -23,28 +23,31 @@ library(tidyverse)
 
 # agent_census = a data frame with a column for agent ID and a column for agent age.
 # mortality_regime = a data frame with values for a Siler function of mortality
-reap <- function(agent_census, mortality_regime){ 
+reap <- function(agent_census, mortality_regime) {
   
-  pop <- agent_census
-  calculate_age_based_risk <- function(age){mortality_regime$a1 * exp(-mortality_regime$b1 * age) + # infant mortality
-      mortality_regime$a2 + # age-independent mortality 
-      mortality_regime$a3 * exp(mortality_regime$b3 * age) # senescent mortality
+  # Vectorized calculation of age-specific mortality risk
+  calculate_age_based_risk <- function(age) {
+    mortality_regime$a1 * exp(-mortality_regime$b1 * age) + 
+      mortality_regime$a2 + 
+      mortality_regime$a3 * exp(mortality_regime$b3 * age)
   }
   
-  reaper_math <- data.frame(agent_id = pop$agent_id)
-  reaper_math$age_specific_mortality_risk <- sapply(pop$age, FUN = calculate_age_based_risk)
+  # Apply the age-specific mortality risk calculation to the entire population
+  age_specific_mortality_risk <- calculate_age_based_risk(agent_census$age)
   
-  # Now, draw a random number between 0 and 1. (Pick a card, any card...)
-  reaper_math$death_dice <- sample(runif(n = 10000, min = 0, max = 1), size = length(pop$agent_id), replace = TRUE)
-  reaper_math$time_to_die <- if_else(reaper_math$death_dice < reaper_math$age_specific_mortality_risk, "yes", "no")
+  # Generate random numbers for death dice
+  death_dice <- runif(n = nrow(agent_census))
   
-  unlucky_ones <- reaper_math %>%
-    filter(time_to_die == "yes")
+  # Determine if each agent will die
+  time_to_die <- death_dice < age_specific_mortality_risk
   
-  pop$death_recorded <- case_when(pop$agent_id %in% unlucky_ones$agent_id ~ "yes", 
-            TRUE ~ as.character(pop$death_recorded))
+  # Record deaths
+  agent_census$death_recorded[time_to_die] <- "yes"
   
-    return(list(agent_census = pop, pop_turnover = nrow(unlucky_ones)))
+  # Count the number of deaths
+  pop_turnover <- sum(time_to_die)
+  
+  return(list(agent_census = agent_census, pop_turnover = pop_turnover))
 }
 
 

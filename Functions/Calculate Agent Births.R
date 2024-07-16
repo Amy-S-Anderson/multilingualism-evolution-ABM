@@ -28,23 +28,26 @@ library(tidyverse)
 # n_births: an integer, which should match the number of deaths in this year of model time. 
 # agent_census = a data frame with columns for agent ID, age, sex, and spouse ID.  
 
-sow_stationary <- function(n_births, agent_census){
-  fertile_myrtles <- subset(agent_census, female == 1 & 
-                              age >= 15 & age <= 49 &
-                              !is.na(spouse_id) &
-                              is.na(death_recorded))
-  # average annual probability of giving birth
-  # This equation determines the individual-level probability of giving birth based on the total number of fertile women and the total number of births needed to balance deaths and maintain population stationarity.
-#  annual_birth_probability <- n_births / nrow(fertile_myrtles) 
-  if(nrow(fertile_myrtles) >= n_births){
-    new_moms <- data.frame(agent_id = sample(fertile_myrtles$agent_id, size = n_births, replace = F)) 
-# If the number of children that must be born to maintain population stationarity is larger than the number of potential mothers, allow births of twins, triplets, etc. 
-  } else new_moms <- data.frame(agent_id = sample(fertile_myrtles$agent_id, size = n_births, replace = T)) 
-
-new_parents <- left_join(new_moms, fertile_myrtles[,c("agent_id", "spouse_id")], by = "agent_id")
-
-return(new_parents)
+sow_stationary <- function(n_births, agent_census) {
+  # Subset fertile females
+  fertile_couples <- agent_census[agent_census$female == 1 & 
+                                    agent_census$age >= 15 & 
+                                    agent_census$age <= 49 &
+                                    !is.na(agent_census$spouse_id) &
+                                    is.na(agent_census$death_recorded), ]
+  
+  # Determine the sampling method based on the number of births needed
+  replace_sampling <- nrow(fertile_couples) < n_births
+  
+  # Sample new mothers
+  new_moms <- data.frame(agent_id = sample(fertile_couples$agent_id, size = n_births, replace = replace_sampling))
+  
+  # Join to get spouse_id for new parents
+  new_parents <- merge(new_moms, fertile_couples[, c("agent_id", "spouse_id")], by = "agent_id")
+  
+  return(new_parents)
 }
+
 
 
 

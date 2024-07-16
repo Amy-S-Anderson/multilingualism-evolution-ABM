@@ -108,24 +108,22 @@ calculate_language_exposures <- function(conversation_languages_vector, pop = ag
 # language_exposures = the output of the calculate_language_exposures() function above, applied to the full agent_census data frame. Should be a data frame with ncols = length(languages) and nrows = nrow(agent_census)
 # pop = a data frame of agent characteristics, including agent ID, age, and current proficiency in each language
 # pop_languages = a character vector of the names of the languages being simulated in the model space. 
-learn_languages <- function(language_exposures = agent_language_exposures, pop = agent_census, pop_languages = languages){
+
+learn_languages <- function(language_exposures, pop = agent_census, pop_languages = languages){
   
-  # effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
-  ages = seq(from = 0, to = 120, by = 1)
-  ages = ages[which(ages < max(agent_census$age))]
-  params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
-  age_rate <-  sapply(ages, FUN = function(ages){
-    params$r0 * (1 - (1 / (1 + exp(-params$a * (ages - params$tc - params$d))))) + 0.5
-  })
+  # Effect of age on language learning rate -- THIS WILL CHANGE AFTER INPUT FROM LINGUISTIS ####
+  params <- list(d = 18, a = 0.5, r0 = 9, tc = 0)
   
-  for(lang in pop_languages){
-    pop[,lang] <- pop[,lang] +  # current language proficiency
-      age_rate[pop$age + 1] * language_exposures[lang] # newly gained language proficiency
-    
-    pop[,lang] <- case_when(pop[,lang] > 100 ~ 100, # set a proficiency ceiling at 100
-                            TRUE ~ as.numeric(pop[,lang]))
+  # Calculate age_rate for each age from 0 to 120
+  ages <- 0:120
+  age_rate <- params$r0 * (1 - (1 / (1 + exp(-params$a * (ages - params$tc - params$d))))) + 0.5
+  
+  # Update language proficiencies in a vectorized way
+  for (i in seq_along(pop_languages)) {
+    lang <- pop_languages[i]
+    age_rates_for_population <- age_rate[pop$age + 1]
+    pop[[lang]] <- pmin(pop[[lang]] + age_rates_for_population * language_exposures[, i], 100)
   }
   
   return(pop)
-  
 }
