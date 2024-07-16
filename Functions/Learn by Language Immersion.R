@@ -91,7 +91,7 @@ calculate_language_exposures <- function(conversation_languages_vector, pop = ag
   if(absolute_exposure == TRUE){ 
     relative_exposures <- (exposure_count / saturation_exposure)^non_linear_scaling
     if(relative_exposures < 1) {relative_exposures <- 1} # cap the possible proficiency gains for agents who exceed the saturation exposure for a language
-  } else{relative_exposures <- exposure_count / max(exposure_count)}
+  } else{relative_exposures <- (exposure_count / max(exposure_count))^non_linear_scaling }
   
   return(relative_exposures)
 }
@@ -111,10 +111,12 @@ calculate_language_exposures <- function(conversation_languages_vector, pop = ag
 learn_languages <- function(language_exposures = agent_language_exposures, pop = agent_census, pop_languages = languages){
   
   # effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
-  ages = seq(from = 0, to = 120)
+  ages = seq(from = 0, to = 120, by = 1)
+  ages = ages[which(ages < max(agent_census$age))]
   params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
-  age_factor <-  params$r0 * (1 - (1 / (1 + exp(-params$a * (age - params$tc - params$d))))) + 0.5
-  age_rate <- ages * age_factor
+  age_rate <-  sapply(ages, FUN = function(ages){
+    params$r0 * (1 - (1 / (1 + exp(-params$a * (ages - params$tc - params$d))))) + 0.5
+  })
   
   for(lang in pop_languages){
     pop[,lang] <- pop[,lang] +  # current language proficiency
