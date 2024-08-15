@@ -55,8 +55,45 @@ select_conversation_partners <- function(agent_census, parent_weight = 1, peer_w
 ########################################################################################
 
 
+#### Functions for Model 3.0 ####
 
-#### Example use ####
+### This function generates a matrix of agent identities for conversational interactions. Each row conversational partners for a single agent. Because agents are sampled with replacement, some agents are likely to have more than 10 conversations (from being sampled in another agent's row of interactions).
 
-# requires an agent_census data frame with values for parent ID
+# agents = a data frame of agents and their attributes
+# n_interactions = an integer; the number of conversations to sample for each agent
+# own_houshold_prob = a number between 0 and 1. This is a probability weighting that determines what proportion of an agent's interactions are with members of their same household vs. others outside their household. When set at 0.5, half of an agent's interactions are likely to be with agents in their own household. 
+generate_interactions <- function(agents, n_interactions, own_household_prob) {
+  ego <- i
+  alters <- which(agents$agent_id != ego)
+  # Identify agents' household membership
+  households <- agents[alters,]$household
+  n_agents <- nrow(agents)
+  
+  # Initialize a matrix to store interactions
+  interaction_matrix <- matrix(NA, nrow = n_agents, ncol = n_interactions)
+  
+  # Calculate probabilities for each agent
+  for (i in 1:n_agents) {
+    # Determine which agents are in the same household as agent i
+    same_household <- (households == households[i])
+    
+    # Create probability vector: own household probability and others
+    probabilities <- ifelse(same_household, 
+                            own_household_prob / sum(same_household), 
+                            (1 - own_household_prob) / sum(!same_household))
+    
+    # Sample interactions for agent i based on calculated probabilities
+    interaction_matrix[i, ] <- sample(agents[alters,]$agent_id, n_interactions, replace = TRUE, prob = probabilities)
+  }
+  # 
+  # # Reshape the interaction_matrix into a data frame with appropriate column names
+  # interaction_df <- data.frame(
+  #   agent_id = rep(agents$agent_id, each = n_interactions),
+  #   interaction_with = as.vector(interaction_matrix)
+  # )
+  
+  # return(interaction_df)
+  return(interaction_matrix)
+}
+
 

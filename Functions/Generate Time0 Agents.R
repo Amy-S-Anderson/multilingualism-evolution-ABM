@@ -183,3 +183,47 @@ assign_starting_proficiency <- function(agent_census, languages){
   
   return(agent_census)
 }
+
+
+
+
+########################################################################################
+
+#### Functions for Model 3.0 ####
+
+
+# This function returns a data frame of agents of a single age cohort, with 1:1 sex ratio and initialized columns for language capacity and household ID
+
+# n = desired number of agents
+# max_age = oldest age in population of agents.
+start_cohort <- function(n, age, n_languages){
+  agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = n), FUN = generate_agent_id)) %>%
+    # uniform age structure
+    mutate(age = age,
+           # initiate year record
+           year = 0,
+           household = NA)
+  
+  # alternate assigning male and female state for each agent. 
+  agent_census$female <- rep(c(0,1), nrow(agent_census)/2)
+  
+  # create columns to language proficiency variables
+  languages <- c(paste("Speaks", chartr("123456789", "ABCDEFGHI", seq(n_languages)), sep = " "),
+                 paste("Understands", chartr("123456789", "ABCDEFGHI", seq(n_languages)), sep = " ")
+  )
+  agent_languages <- as.data.frame(matrix(NA, nrow = nrow(agent_census), ncol = length(languages)))
+  names(agent_languages) <- languages
+  
+  # Randomly assign each agent a single language that they both speak and understand
+  for (i in 1:nrow(agent_census)) {
+    random_language <- sample(1:n_languages, 1)
+    agent_languages[i, paste("Speaks", chartr("123456789", "ABCDEFGHI", random_language), sep = " ")] <- 100
+    agent_languages[i, paste("Understands", chartr("123456789", "ABCDEFGHI", random_language), sep = " ")] <- 100
+  }
+  
+  agent_census <- cbind(agent_census, agent_languages)
+  
+  return(agent_census)
+}
+
+

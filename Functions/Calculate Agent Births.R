@@ -121,14 +121,23 @@ birth_new_agents <- function(agent_census, new_parents){
 ########################################################################################
 
 
+#### Functions for Model 3.0 ####
 
-
-#### Example use ####
-
-# Need an example data frame that includes matched spouses. 
-
-# total fertility rate: 2 children per woman
-# tfr = 2
-# test <- sow(tfr, agent_census)
-
-# test <- sow_stationary(agent_census, n_births = 10)
+# Generate first child cohort
+birth_new_cohort <- function(agent_census){
+  # Create a data frame with a single row of NA values
+  newborns <- data.frame(matrix(0, nrow = length(agent_census[which(agent_census$age == 25),]$age), ncol = ncol(agent_census)))
+  # Set the column names to match those of agent_census
+  colnames(newborns) <- colnames(agent_census)
+  
+  household_ids <- unique(agent_census[which(agent_census$age == 25),]$household)
+  newborns$agent_id <- sapply(seq(from = max(as.numeric(substr(agent_census$agent_id, 4, nchar(agent_census$agent_id)))),
+                                  length.out = length(agent_census[which(agent_census$age == 25),]$age) ), 
+                              generate_agent_id)
+  newborns$age <- 0
+  newborns$female <- c(rep(0, length(agent_census[which(agent_census$age == 25),]$age)/2), rep(1, length(agent_census[which(agent_census$age == 25),]$age)/2))
+  newborns$household <- c(rep(household_ids, 2))
+  
+  agents <- rbind(agent_census, newborns)
+  return(agents)
+}

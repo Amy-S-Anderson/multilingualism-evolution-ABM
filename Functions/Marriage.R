@@ -197,3 +197,36 @@ unlist(singles_count)
 
 hist(agent_census[which(is.na(agent_census$spouse_id)),]$age)
 # After 5 years, the only unmarried people were under age 20 or over age 60 -- no compatible pairs left, given the population age structure. Once fertility is introduced, this problem should correct itself. 
+
+
+
+###############################################################################################
+
+#### Functions for Model 3.0 ####
+
+# Marry them off, at random
+marry_random <- function(agents){
+  # generate household ID numbers for new couples
+  max_household_id <- ifelse(all(is.na(agents$household)), 0, max(agents$household, na.rm = TRUE))
+  household_ids <- seq(from = max_household_id + 1, length.out = nrow(women))
+  
+  
+  # Identify the eligible singles
+  women <- subset(agents, age == 25 & female == 1)
+  men <- subset(agents, age == 25 & female == 0)
+  
+  # Randomly shuffle men to create random pairings
+  shuffled_men <- men[sample(nrow(men)), ]
+  
+  # Assign household IDs to the paired couples
+  women$household <- household_ids
+  shuffled_men$household <- household_ids
+  
+  # Update the agents data frame with the new household IDs
+  agents$household[match(women$agent_id, agents$agent_id)] <- women$household
+  agents$household[match(shuffled_men$agent_id, agents$agent_id)] <- shuffled_men$household
+  
+  return(agents)
+  
+}
+
