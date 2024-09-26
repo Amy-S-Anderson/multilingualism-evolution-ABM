@@ -82,7 +82,7 @@ coordinate_max_proficiency <- function()
 # pop = data frame of agent traits. Defaults to the agent_census data frame created by other model functions that should be called before this one. 
 
 
-select_language_of_conversation_at_random <- function(agent_conversation_partners, pop = agent_census,
+select_language_of_conversation_at_random <- function(agent_conversation_partners, pop = agents,
                                                       min_speaking_proficiency = MIN_SPEAKING_PROFICIENCY){
   
   # Extract the relevant columns once
@@ -172,5 +172,94 @@ select_language_of_conversation_max_proficiency <- function(conversations, pop =
 }
 
 
+
+
+
+######################################################################################################################
+
+#### Functions for Model 3.0 ####
+
+
+
+# Function to select the conversational language spoken by an agent in a specific interaction -- PICK AT RANDOM.
+# single_agent_interactions = a named list of a single vector; one list in the nested interactions_list list. 
+# pop = agents, a data frame of agents and their traits
+
+select_language_at_random_to_speak <- function(agents_in_interaction, pop = agents){
+  # Extract the relevant columns once
+  speaks <- names(pop)[which(startsWith(names(pop), "Speaks"))]
+  language_data <- pop[pop$agent_id %in% agents_in_interaction, c("agent_id", speaks)] 
+  speaker_indices <- which(agents_in_interaction %in% language_data$agent_id)
+  language_data <- language_data %>%
+    pivot_longer(cols = starts_with("Speaks"), names_to = "can_speak", values_to = "Transmission") %>%
+    group_by(agent_id) %>%
+      mutate(Transmission_sum = sum(Transmission, na.rm = T))
+  
+    speechless <- data.frame(agent_id = language_data[which(language_data$Transmission_sum == 0),]$agent_id, 
+                             spoken = NA)  %>% distinct()
+    speakers <- data.frame(agent_id = language_data[which(language_data$Transmission_sum != 0),]$agent_id)
+    if(nrow(speechless) < length(unique(agents_in_interaction))){
+      speakers <- language_data %>%
+        filter(!is.na(Transmission)) %>% 
+        group_by(agent_id) %>%
+        summarise(spoken = sample(can_speak, size = 1)) %>%
+        ungroup()
+    }
+
+    language_chosen <- rbind(speakers, speechless) 
+    spoken <- language_chosen$spoken[match(agents_in_interaction, language_chosen$agent_id)] 
+                                         
+  return(spoken)
+}
+
+# select_language_at_random_to_speak(agents_in_interaction)
+
+
+
+
+
+# Function to apply different language choice rules for parents and others speaking to an agent.
+# single_agent_interactions = a character vector of agent IDs, naming the conversant for each of the focal agent's conversations this year. 
+# This is stored as a named list inside interaction_lists, with the focal agent ID as the name of the vector. 
+# parent_rule = either the name of a language choice function, or "L1" (first language learned). Defaults to "L1"
+# others_rule = either the name of a language choice function, or "L1" (first language learned). Defaults to select_language_at_random_to_speak()
+
+single_agent_interactions <- interaction_list[107]
+select_language_to_speak_in_conversation <- function(single_agent_interactions, 
+                                                     pop = agents,
+                                                     parent_rule = "L1", 
+                                                     others_rule = select_language_at_random_to_speak){
+  # identify focal agent
+  focal_agent <- names(single_agent_interactions)
+  # Identify their family members from the agent trait data frame
+  family <- pop[which(pop$household == pop[which(agent_id == focal_agent),]$household & pop$agent_id != focal_agent),]
+  # identify the focal agent's parents
+  parents <- family[which(family$age > pop[which(agent_id == focal_agent),]$age),]
+  
+  # Step 1: Get agent IDs from the named vector single_agent_interactions
+  focal_agent_index <- which(pop$agent_id == focal_agent)
+  agents_in_interaction <- single_agent_interactions[[1]]
+  # Step 2: Find the indices of agent IDs in interaction_list[1] that are in the 'parents' data frame
+  parent_indices <- which(agents_in_interaction %in% parents$agent_id)
+  # Step 3: Find the indices of agent IDs in the vector of interactions that are NOT parents (i.e., everyone else)
+  other_indices <- which(!(agents_in_interaction %in% parents$agent_id))
+  
+  # Apply Language Choice Rules
+  # Step 4: Apply Others Language Choice Rule to non-parent agents
+  agents_in_interaction[other_indices] <- others_rule(agents_in_interaction[other_indices])
+  
+  # Step 5: Apply Parental Language Choice Rule to Parent Agents:
+  if(length(parent_indices) > 0){
+    if(parent_rule == "L1"){
+      # Create a corresponding vector of first_language values from 'parents' for those indices
+      # Populate list_of_vectors for interaction_list[1] at the corresponding positions
+      agents_in_interaction[which(agents_in_interaction %in% parents$agent_id)] <- parents$first_language[match(agents_in_interaction[parent_indices], parents$agent_id)]
+    } # else if(parent_rule == "pick_at_random"){ choose_language_at_random()}
+  }
+  
+  language_of_conversation <- agents_in_interaction
+  # return vector of languages spoken to focal agent (vector is named for focal agent)
+  return(language_of_conversation)
+}
 
 
