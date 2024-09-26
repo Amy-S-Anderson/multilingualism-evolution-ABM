@@ -34,29 +34,6 @@ source("./Functions//Plotting_Functions.R")
 
 
 
-### Generate/Load a vector to sample for the age structure created by the pre-determined mortality pattern CDW15
-# This will save time while you're developing code for age-structured models. 
 
-### This function generates a set of starting agents from a stable population with a specified mortality hazard and pulls their ages.
-#  initial_ages <- generate_age_structure(n = 10000, mortality = CDW15, years = 300) # this line will take a few minutes to run.
-#  data.table::fwrite(list(initial_ages), file = "CDW15_age_structure.txt")
-initial_ages <- as.numeric(read_lines(file = "CDW15_age_structure.txt")) # read_lines() automatically treats each entry in the .txt file as a character string. Convert to numeric. 
-
-
-
-
-
-select_language_of_conversation_at_random <- function(agent_conversation_partners, pop = agent_census,
-                                                      min_speaking_proficiency = MIN_SPEAKING_PROFICIENCY){
-  
-  # Extract the relevant columns once
-  language_data <- pop[pop$agent_id %in% agent_conversation_partners, c ("agent_id", languages)] %>%
-    pivot_longer(cols = starts_with("Language"), names_to = "can_speak", values_to = "proficiency") %>%
-    filter(proficiency > min_speaking_proficiency) %>%
-    group_by(agent_id) %>%
-    summarise(spoken = if(n() > 0) sample(can_speak, size = 1))
-  
-  return(language_data$spoken)
-}
 
 
