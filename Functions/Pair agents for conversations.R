@@ -62,11 +62,7 @@ select_conversation_partners <- function(agent_census, parent_weight = 1, peer_w
 # agents = a data frame of agents and their attributes
 # n_interactions = an integer; the number of conversations to sample for each agent
 # own_houshold_prob = a number between 0 and 1. This is a probability weighting that determines what proportion of an agent's interactions are with members of their same household vs. others outside their household. When set at 0.5, half of an agent's interactions are likely to be with agents in their own household. 
-generate_interactions <- function(agents, n_interactions, own_household_prob) {
-  ego <- i
-  alters <- which(agents$agent_id != ego)
-  # Identify agents' household membership
-  households <- agents[alters,]$household
+generate_interactions <- function(agents, n_interactions, own_household_prop) {
   n_agents <- nrow(agents)
   
   # Initialize a matrix to store interactions
@@ -74,16 +70,23 @@ generate_interactions <- function(agents, n_interactions, own_household_prob) {
   
   # Calculate probabilities for each agent
   for (i in 1:n_agents) {
+    ego <- agents$agent_id[i]
+    alters <- agents[which(agents$agent_id != ego),]
+    # Identify agents' household membership
+    households <- alters$household
     # Determine which agents are in the same household as agent i
-    same_household <- (households == households[i])
+    same_household <- (households == agents$household[i]) 
     
     # Create probability vector: own household probability and others
-    probabilities <- ifelse(same_household, 
-                            own_household_prob / sum(same_household), 
-                            (1 - own_household_prob) / sum(!same_household))
+    probability_ratio <- ifelse(same_household, 
+                            own_household_prop / sum(same_household), 
+                            (1 - own_household_prop) / sum(!same_household))
+    #### * Note that, as written this means a own_household_prop value of 0.5 and a two-generation population size of 200
+    # means that an agent is 65.33 times more likely to interact with a family member than a non-kin agent. 
+    # It should work out that, on average, half of an agent's interactions are with a family member. 
     
     # Sample interactions for agent i based on calculated probabilities
-    interaction_matrix[i, ] <- sample(agents[alters,]$agent_id, n_interactions, replace = TRUE, prob = probabilities)
+    interaction_matrix[i, ] <- sample(alters$agent_id, n_interactions, replace = TRUE, prob = probability_ratio)
   }
   # 
   # # Reshape the interaction_matrix into a data frame with appropriate column names
@@ -94,6 +97,42 @@ generate_interactions <- function(agents, n_interactions, own_household_prob) {
   
   # return(interaction_df)
   return(interaction_matrix)
+}
+
+
+
+
+#### this function takes a matrix of agent IDs and returns a list of named character vectors. 
+# The name of each resulting character vector corresponds to the ID of the agent who is the focal agent. The agent IDs within the list are those agents with whom the focal agentinteracted in this year of model time. 
+
+# interaction_matrix = a matrix of agent IDs, with each row corresponding to the sampled conversants for each agent in the agent_census df
+# agents = a data frame of agents and their traits. 
+
+# Vectorized function to generate a list of all agents that each ego agent interacts with
+get_interaction_lists <- function(interaction_matrix, agents) {
+  # Number of agents
+  n_agents <- nrow(agents)
+  
+  # Ego agent IDs
+  ego_agent_ids <- agents$agent_id
+  
+  # Interaction matrix already contains interactions for each ego agent
+  own_interactions <- split(interaction_matrix, row(interaction_matrix))
+  
+  # External interactions: identify where each ego agent appears in the matrix
+  external_interactions <- lapply(ego_agent_ids, function(id) {
+    which(interaction_matrix == id, arr.ind = TRUE)[, 1]
+  })
+  
+  # Combine own interactions with external interactions for each agent
+  combined_interactions <- mapply(function(own, external) {
+    c(own, ego_agent_ids[external])
+  }, own_interactions, external_interactions, SIMPLIFY = FALSE)
+  
+  # Assign names to the list for clarity
+  names(combined_interactions) <- ego_agent_ids
+  
+  return(combined_interactions)
 }
 
 

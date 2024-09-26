@@ -206,17 +206,16 @@ hist(agent_census[which(is.na(agent_census$spouse_id)),]$age)
 
 # Marry them off, at random
 marry_random <- function(agents){
-  # generate household ID numbers for new couples
-  max_household_id <- ifelse(all(is.na(agents$household)), 0, max(agents$household, na.rm = TRUE))
-  household_ids <- seq(from = max_household_id + 1, length.out = nrow(women))
-  
-  
   # Identify the eligible singles
   women <- subset(agents, age == 25 & female == 1)
   men <- subset(agents, age == 25 & female == 0)
   
   # Randomly shuffle men to create random pairings
   shuffled_men <- men[sample(nrow(men)), ]
+  
+  # generate household ID numbers for new couples
+  max_household_id <- ifelse(all(is.na(agents$household)), 0, max(agents$household, na.rm = TRUE))
+  household_ids <- seq(from = max_household_id + 1, length.out = nrow(women))
   
   # Assign household IDs to the paired couples
   women$household <- household_ids
