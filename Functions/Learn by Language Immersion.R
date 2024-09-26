@@ -59,6 +59,9 @@ list_interactions <- function(agent_id, interactions = interactions){
 
 #### Function to calculate each agent's level of exposure to each local language, relative to their exposure to the other local languages ####
 
+# This function works both to count up the number of times each agent hears each language,
+# as well as the number of times each agent speaks each language. 
+
 
 # Again, this function is designed to run on a vector of conversations experienced by a single agent. To return values for all agents, use an apply function.
 # on its own, it returns a vector of length(languages). 
@@ -76,8 +79,8 @@ list_interactions <- function(agent_id, interactions = interactions){
 calculate_language_exposures <- function(conversation_languages_vector, pop = agent_census, 
                                          absolute_exposure = FALSE, saturation_exposure = NULL, non_linear_scaling = 1){
   
-  languages <- agent_census %>%
-    select(starts_with("Language")) %>%
+  languages <- agents %>%
+    select(starts_with("Speaks")) %>%
     names()
   
   # count the number of times this agent experienced being spoken to in each language.
@@ -95,6 +98,7 @@ calculate_language_exposures <- function(conversation_languages_vector, pop = ag
   
   return(relative_exposures)
 }
+
 
 
 
@@ -129,11 +133,11 @@ learn_languages <- function(language_exposures, pop = agent_census, pop_language
   return(pop)
 }
 
-test <- learn_languages(agent_language_exposures, pop = agent_census)
+# test <- learn_languages(agent_language_exposures, pop = agent_census)
 
 
 
-learn_languages <- function(language_exposures = agent_language_exposures, pop = agent_census, pop_languages = languages){
+learn_languages <- function(language_exposures, pop = agent_census, pop_languages = languages){
   
   # effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
   ages = seq(from = 0, to = 120, by = 1)
@@ -152,3 +156,68 @@ learn_languages <- function(language_exposures = agent_language_exposures, pop =
   return(pop)
   
 }
+
+
+
+
+
+
+
+
+######################################################################################################################
+
+#### Functions for Model 3.0 ####
+
+
+# This function updates individual agents' Understanding values for each language, as a function of their age and their exposure to each language in this rounde of model time.
+# language exposures = a data frame produced by the 'calculate language exposures' function. It contains a row for each agent and a column for each language, populated with numeric values for language exposure. 
+
+learn_languages_by_listening <- function(language_exposures, pop = agents){
+  
+  # effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
+  ages = seq(from = 0, to = 120, by = 1)
+  params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
+  age_factor <-  params$r0 * (1 - (1 / (1 + exp(-params$a * (ages - params$tc - params$d))))) + 0.5
+  age_rate <- ages * age_factor
+  pop_languages <- names(agents %>% select(starts_with("Understands")))
+  for(lang in pop_languages){
+    pop[,lang] <- case_when(is.na(pop[,lang]) & language_exposures[lang] > 0 ~ age_rate[pop$age + 1] * language_exposures[lang], # if they encountered it for the first time this year, then replace NA with the language gain from this year.
+                            TRUE ~ pop[,lang] + age_rate[pop$age + 1] * language_exposures[lang]) # if they already have a value for this language, add this year's gain to the existing value
+    pop[,lang] <- case_when(pop[,lang] > 100 ~ 100, # set a proficiency ceiling at 100
+                            TRUE ~ as.numeric(pop[,lang]))
+  }
+  
+  return(pop)
+}
+
+
+
+
+
+# This function updates individual agents' Speaking values for each language, as a function of their age and their exposure to each language in this rounde of model time. (It's pretty much identical to the function above. )
+# language exposures = a data frame produced by the 'calculate language exposures' function. It contains a row for each agent and a column for each language, populated with numeric values for language exposure. 
+
+learn_languages_by_speaking <- function(language_exposures, pop = agents){
+  
+  # effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
+  ages = seq(from = 0, to = 120, by = 1)
+  params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
+  age_factor <-  params$r0 * (1 - (1 / (1 + exp(-params$a * (ages - params$tc - params$d))))) + 0.5
+  age_rate <- ages * age_factor
+  pop_languages <- names(agents %>% select(starts_with("Speaks")))
+  for(lang in pop_languages){
+    pop[,lang] <- case_when(is.na(pop[,lang]) & language_exposures[lang] > 0 ~ age_rate[pop$age + 1] * language_exposures[lang], # if they encountered it for the first time this year, then replace NA with the language gain from this year.
+                            TRUE ~ pop[,lang] + age_rate[pop$age + 1] * language_exposures[lang]) # if they already have a value for this language, add this year's gain to the existing value
+    pop[,lang] <- case_when(pop[,lang] > 100 ~ 100, # set a proficiency ceiling at 100
+                            TRUE ~ as.numeric(pop[,lang]))
+  }
+  
+  return(pop)
+}
+
+
+
+
+
+
+
