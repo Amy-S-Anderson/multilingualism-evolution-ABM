@@ -126,7 +126,7 @@ birth_new_agents <- function(agent_census, new_parents){
 # Generate first child cohort
 birth_new_cohort <- function(agent_census){
   # Create a data frame with a single row of NA values
-  newborns <- data.frame(matrix(0, nrow = length(agent_census[which(agent_census$age == 25),]$age), ncol = ncol(agent_census)))
+  newborns <- data.frame(matrix(NA, nrow = length(agent_census[which(agent_census$age == 25),]$age), ncol = ncol(agent_census)))
   # Set the column names to match those of agent_census
   colnames(newborns) <- colnames(agent_census)
   
@@ -137,6 +137,7 @@ birth_new_cohort <- function(agent_census){
   newborns$age <- 0
   newborns$female <- c(rep(0, length(agent_census[which(agent_census$age == 25),]$age)/2), rep(1, length(agent_census[which(agent_census$age == 25),]$age)/2))
   newborns$household <- c(rep(household_ids, 2))
+  newborns$generation <- max(agent_census$generation) + 1
   
   agents <- rbind(agent_census, newborns)
   return(agents)
