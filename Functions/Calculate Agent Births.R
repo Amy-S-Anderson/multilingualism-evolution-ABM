@@ -131,9 +131,10 @@ birth_new_cohort <- function(agent_census){
   colnames(newborns) <- colnames(agent_census)
   
   household_ids <- unique(agent_census[which(agent_census$age == 25),]$household)
-  newborns$agent_id <- sapply(seq(from = max(as.numeric(substr(agent_census$agent_id, 4, nchar(agent_census$agent_id)))),
+  newborns$agent_id <- sapply(seq(from = max(agent_census$agent_id), #as.numeric(substr(agent_census$agent_id, 4, nchar(agent_census$agent_id)))),
                                   length.out = length(agent_census[which(agent_census$age == 25),]$age) ), 
                               generate_agent_id)
+  newborns$year <- agent_census$year
   newborns$age <- 0
   newborns$female <- c(rep(0, length(agent_census[which(agent_census$age == 25),]$age)/2), rep(1, length(agent_census[which(agent_census$age == 25),]$age)/2))
   newborns$household <- c(rep(household_ids, 2))
