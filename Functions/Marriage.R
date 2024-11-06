@@ -229,3 +229,77 @@ marry_random <- function(agents){
   
 }
 
+
+
+
+
+# Match marriage partners according to shared L1, if possible
+
+
+### This function isn't finished....
+marry_shared_L1 <- function(agents, first_language) {
+  # Merge the agents data with their first language data
+  # Since an agent can have multiple languages, we allow for duplicate agent IDs
+  marriageable_agents <- agents %>% 
+    subset(age == 25) %>%
+    select(agent_id, female, household)
+  agents_languages <- merge(marriageable_agents, first_language, by = "agent_id")
+  
+  # Identify the eligible singles
+  women <- subset(agents_languages, female == 1)
+  men <- subset(agents_languages, female == 0)
+  
+  # Generate household ID numbers for new couples
+  max_household_id <- ifelse(all(is.na(agents$household)), 0, max(agents$household, na.rm = TRUE))
+  
+  # Initialize an empty vector for household IDs
+  household_ids <- numeric(0)
+  
+  # List of unique languages from first_language data
+  languages <- unique(agents_languages$first_language)
+  
+  # Keep track of already married agents to prevent multiple marriages
+  married_women <- c()
+  married_men <- c()
+  
+  # Loop over each language to match individuals who speak the same first language
+  for (lang in languages) {
+    # Subset women and men who speak the same first language
+    women_lang <- subset(women, first_language == lang & !agent_id %in% married_women)
+    men_lang <- subset(men, first_language == lang & !agent_id %in% married_men)
+    
+    # Check if there are pairs to match
+    num_pairs <- min(nrow(women_lang), nrow(men_lang))
+    
+    if (num_pairs > 0) {
+      # Randomly shuffle men to create random pairings
+      shuffled_men <- men_lang[sample(nrow(men_lang), num_pairs), ]
+      
+      # Generate household IDs for the current language group
+      new_household_ids <- seq(from = max_household_id + 1, length.out = num_pairs)
+      
+      # Update household IDs for women and men
+      women_lang$household[1:num_pairs] <- new_household_ids
+      shuffled_men$household <- new_household_ids
+      
+      # Append new household IDs
+      household_ids <- c(household_ids, new_household_ids)
+      
+      # Update the agents data frame with the new household IDs
+      agents$household[match(women_lang$agent_id[1:num_pairs], agents$agent_id)] <- new_household_ids
+      agents$household[match(shuffled_men$agent_id, agents$agent_id)] <- new_household_ids
+      
+      # Keep track of married individuals to avoid double marriage
+      married_women <- c(married_women, women_lang$agent_id[1:num_pairs])
+      married_men <- c(married_men, shuffled_men$agent_id)
+      
+      # Increment the max_household_id for the next group
+      max_household_id <- max(new_household_ids)
+    }
+  }
+  
+  unmarried <- agents %>%
+    filter(is.na(household))
+  marry_
+  return(agents)
+}
