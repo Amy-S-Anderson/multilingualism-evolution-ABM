@@ -407,6 +407,82 @@ dyad_score <- if(abs(age_diff) < 20){
 ##############################################################################################################
 
 
+calculate_language_exposures <- function(conversation_languages_vector, pop = agent_census, 
+                                         absolute_exposure = FALSE, saturation_exposure = NULL, non_linear_scaling = 1){
+  
+  # Extract language names
+  languages <- agent_census %>%
+    select(starts_with("Language")) %>%
+    names()
+  
+  # Create a named vector for exposure counts initialized to zero
+  exposure_count <- setNames(numeric(length(languages)), languages)
+  
+  # Tabulate the exposure counts
+  exposure_count <- table(factor(conversation_languages_vector, levels = languages))
+  
+  # Initialize relative_exposures
+  relative_exposures <- numeric(length(languages))
+  
+  if(absolute_exposure){
+    relative_exposures <- (exposure_count / saturation_exposure)^non_linear_scaling
+    relative_exposures[relative_exposures < 1] <- 1
+  } else {
+    max_exposure <- max(exposure_count)
+    if(max_exposure > 0){
+      relative_exposures <- (exposure_count / max_exposure)^non_linear_scaling
+    }
+  }
+  
+  return(relative_exposures)
+}
+
+
+
+
+##############################################################################################################
+#### MODEL 3.0 #### 
+
+
+# function to call mother tongue
+speak_mother_tongue <- function(agent, traits = agent_traits){
+  return(traits[which(traits$agent_id == agent),]$first_language)
+}
+
+# function to call language with max Speaks value
+speak_max_score <- function(agent, agents){
+  speaks <- agents[which(agents$agent_id == agent),] %>% select(starts_with("Speaks"))
+  languages = names(speaking_skill)
+  # Handle case where all proficiency values are NA
+  if (all(is.na(speaks))) {
+    return(NA)  # Return NA or a default language if desired
+  }
+  
+  max_value <- max(speaks, na.rm = TRUE)
+  
+  # Check if max_value is valid and select language accordingly
+  if (max_value == -Inf) {
+    return(NA)  # No valid languages, return NA or a default language
+  } else {
+    chosen_languages <- languages[which(speaks == max_value)]
+    chosen_language <- if_else(length(chosen_languages) > 1, sample(chosen_languages, 1), chosen_languages) # In case of ties, choose one randomly
+    return(chosen_language)  
+  }
+}
+
+
+
+agents_in_interaction <- agents_in_interaction[other_indices]
+
+
+# Usage of the function with other_indices
+other_indices <- which(!(agents_in_interaction %in% parents$agent_id))
+
+# Apply the language choice rules for non-parent agents
+agents_in_interaction[other_indices] <- select_language_at_random_to_speak(agents_in_interaction[other_indices])
+
+##############################################################################################################
+
 ##### TEST RUN TIME ####
 start.time <- Sys.time()
 
