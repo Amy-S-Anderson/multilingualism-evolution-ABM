@@ -14,8 +14,9 @@ library(tidyverse)
 
 #### Function: generate_agent_id 
 generate_agent_id <- function(start_value) { # the first start_value should be 0. But this means that inside the model, as new agents are born, the numeric portion of the previous agent's ID can be used as the start value to generate the next agent's ID. 
-  agent_number <- start_value + 1
-  id <- paste("id", agent_number, sep = "_")
+  #agent_number <- start_value + 1
+  id <- start_value + 1
+  #id <- paste("id", agent_number, sep = "_")
   return(id)
 }
 
