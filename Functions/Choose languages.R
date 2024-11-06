@@ -182,35 +182,49 @@ select_language_of_conversation_max_proficiency <- function(conversations, pop =
 
 
 # Function to select the conversational language spoken by an agent in a specific interaction -- PICK AT RANDOM.
-# single_agent_interactions = a named list of a single vector; one list in the nested interactions_list list. 
+# agents_in_interaction = a named list of a single vector; one list in the nested interactions_list list. 
 # pop = agents, a data frame of agents and their traits
 
-select_language_at_random_to_speak <- function(agents_in_interaction, pop = agents){
+select_language_at_random_to_speak <- function(agents_in_interaction, pop = agents) {
   # Extract the relevant columns once
   speaks <- names(pop)[which(startsWith(names(pop), "Speaks"))]
   language_data <- pop[pop$agent_id %in% agents_in_interaction, c("agent_id", speaks)] 
-  speaker_indices <- which(agents_in_interaction %in% language_data$agent_id)
+  
   language_data <- language_data %>%
     pivot_longer(cols = starts_with("Speaks"), names_to = "can_speak", values_to = "Transmission") %>%
     group_by(agent_id) %>%
-      mutate(Transmission_sum = sum(Transmission, na.rm = T))
+    mutate(Transmission_sum = sum(Transmission, na.rm = TRUE))
   
+  # Identify agents who cannot speak any language
+  if (nrow(language_data[which(language_data$Transmission_sum == 0), ]) > 0) {
     speechless <- data.frame(agent_id = language_data[which(language_data$Transmission_sum == 0),]$agent_id, 
-                             spoken = NA)  %>% distinct()
-    speakers <- data.frame(agent_id = language_data[which(language_data$Transmission_sum != 0),]$agent_id)
-    if(nrow(speechless) < length(unique(agents_in_interaction))){
-      speakers <- language_data %>%
-        filter(!is.na(Transmission)) %>% 
-        group_by(agent_id) %>%
-        summarise(spoken = sample(can_speak, size = 1)) %>%
-        ungroup()
-    }
-
-    language_chosen <- rbind(speakers, speechless) 
-    spoken <- language_chosen$spoken[match(agents_in_interaction, language_chosen$agent_id)] 
-                                         
+                             spoken = NA) %>% distinct()
+  } else {
+    # If no speechless agents, initialize an empty data frame
+    speechless <- data.frame(agent_id = character(0), spoken = character(0))
+  }
+  
+  # Identify agents who can speak at least one language
+  if (nrow(language_data[which(language_data$Transmission_sum > 0), ]) > 0) {
+    speakers <- language_data %>%
+      filter(Transmission > 0) %>% 
+      group_by(agent_id) %>%
+      summarise(spoken = sample(can_speak, size = 1)) %>%
+      ungroup()
+  } else {
+    # If no speakers, initialize an empty data frame
+    speakers <- data.frame(agent_id = character(0), spoken = character(0))
+  }
+  
+  # Combine the results
+  language_chosen <- rbind(speakers, speechless) 
+  
+  # Ensure the order matches the original agents_in_interaction order
+  spoken <- language_chosen$spoken[match(agents_in_interaction, language_chosen$agent_id)] 
+  
   return(spoken)
 }
+
 
 # select_language_at_random_to_speak(agents_in_interaction)
 
@@ -224,7 +238,7 @@ select_language_at_random_to_speak <- function(agents_in_interaction, pop = agen
 # parent_rule = either the name of a language choice function, or "L1" (first language learned). Defaults to "L1"
 # others_rule = either the name of a language choice function, or "L1" (first language learned). Defaults to select_language_at_random_to_speak()
 
-single_agent_interactions <- interaction_list[107]
+# single_agent_interactions <- interaction_list[107]
 select_language_to_speak_in_conversation <- function(single_agent_interactions, 
                                                      pop = agents,
                                                      parent_rule = "L1", 
@@ -262,4 +276,54 @@ select_language_to_speak_in_conversation <- function(single_agent_interactions,
   return(language_of_conversation)
 }
 
+
+
+
+
+
+
+# Function to choose the language with the highest speaking value as each agent's language to speak in a conversation. If an agent's highest speaking value is tied across multiple languages, sample at random. 
+# conversations =  a vector of agent IDs, probably from the interactions_list() of dyadic conversation partners
+# pop = agents = the main active data frame of agent attributes
+
+select_language_max_efficacy <- function(conversations, pop = agents) {
+  
+  # identify the languages in the simulation space
+  languages <- names(agent_census %>% select(starts_with("Speaks")))
+  
+  # Subset the speaking values for the agents named in 'conversations'
+  speakers <- pop[pop$agent_id %in% conversations, c("agent_id", languages)]
+  
+  # Identify rows where all language values are NA
+  speakers_indices <- which(speakers$agent_id %in% speakers[rowSums(!is.na(speakers[, languages])) > 0, ]$agent_id)
+  NA_indices <- which(!speakers$agent_id %in% speakers[rowSums(!is.na(speakers[, languages])) > 0, ]$agent_id)
+  
+  # Identify each agent's highest speaking value 
+  max_proficiency[speakers_indices] <- apply(speakers[speakers_indices, languages], 1, max, na.rm = TRUE)
+  max_proficiency[NA_indices] <- NA
+  
+  # Identify the languages with those highest speaking values for each agent
+  
+      highest_proficiency_languages <- apply(speakers[speakers_indices, languages], 1, function(x) languages[which(x == max(x, na.rm = TRUE))])
+      highest_proficiency_languages[speakers_indices] <- 
+    
+  
+  highest_proficiency_languages <- apply(speakers[, languages], 1, function(x) languages[which(x == max(x, na.rm = TRUE))])
+  
+  # Determine the preferred language for each agent
+  preferred_language <- sapply(1:nrow(speakers), function(i) {
+    if (length(highest_proficiency_languages[i]) < 1) {
+      NA
+    } else {
+      if (length(highest_proficiency_languages[[i]]) == 1) {
+        highest_proficiency_languages[[i]]
+      } else {
+        # if multiple languages are tied for the highest value, sample from these at random. 
+        sample(highest_proficiency_languages[[i]], 1)
+      }
+    }
+  })
+  return(preferred_language)
+}
+  
 
