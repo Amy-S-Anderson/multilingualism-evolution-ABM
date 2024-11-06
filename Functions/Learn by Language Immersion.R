@@ -176,7 +176,7 @@ learn_languages_by_listening <- function(language_exposures, pop = agents){
   
   # effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
   ages = seq(from = 0, to = 120, by = 1)
-  params <- data.frame(d = 18, a = 0.5, r0 = 9, tc = 0)
+  params <- data.frame(d = 18, a = 0.2, r0 = 9, tc = 0)
   age_factor <-  params$r0 * (1 - (1 / (1 + exp(-params$a * (ages - params$tc - params$d))))) + 0.5
   age_rate <- ages * age_factor
   pop_languages <- names(agents %>% select(starts_with("Understands")))
