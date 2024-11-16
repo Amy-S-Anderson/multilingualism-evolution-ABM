@@ -16,6 +16,13 @@
 # Every year, everyone picks ten conversation partners (with replacement) from the population. Because other agents may also pick them, each agent has an average of 22 conversations each year. 
 # In every conversation, each partner speaks by picking at random from among their known languages. Conversation partners do not need to coordinate on a single language within their conversation. 
 
+
+
+
+run_model <- function(generation_size = 100, 
+                               generations_n = 10, 
+                               household_interaction_prob = 0.25,
+                               parent_language_choice = "random consistent"){
 #### GENERATE POPULATION DEMOGRAPHY #### 
 # Generate first parent cohort, all age 25, all monolingual in one of five languages (A-E)
 agents <- start_cohort(n = 100, age = 25, n_languages = 5)
@@ -35,7 +42,7 @@ output <- as.data.frame(matrix(0, nrow = 0, ncol = ncol(agents)))
 names(output) <- names(agents)
 
 # set number of generations to run
-generations = 5
+generations = 10
 for(g in seq(generations)){
   print(paste("generation", g, sep = " ")) # Loop Counter in console will tell you which generation is growing up right now. 
   
