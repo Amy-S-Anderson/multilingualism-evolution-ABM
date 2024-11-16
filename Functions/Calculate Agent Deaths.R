@@ -63,25 +63,25 @@ CDW15 <- data.frame(a1 = 0.175, b1 = 1.4, a2 = 0.00368, a3 = 0.000075, b3 = 0.09
 #### Example use ####
 
 # Mortality Regime parameters for Siler model. Based on parameter values for Tsimane horticulturalists from Gurven and Kaplan 2007.
-Tsimane <- data.frame(a1= 0.221,
-                      b1= 1.193,
-                      a2= 0.009,
-                      a3= 0.000023,
-                      b3= 0.119)
-
-# generate agent IDs
-# source('./Functions/Generate Agent IDs.R')
-agent_id <- sapply(seq(from = 0, length.out = 1000), FUN = generate_agent_id)
-
-# assign a uniform age structure
-age <- sample(0:80, 1000, replace = TRUE)
-
-agents <- data.frame(agent_id, age, death_recorded = NA)
-
-test <- reap(agents, mortality_regime = Tsimane)
-
-
-ggplot(test$agent_census, aes(x = age)) +
-  geom_bar(aes(fill = as.factor(death_recorded))) +
-  labs(fill = "died") +
-  theme_bw()
+# Tsimane <- data.frame(a1= 0.221,
+#                       b1= 1.193,
+#                       a2= 0.009,
+#                       a3= 0.000023,
+#                       b3= 0.119)
+# 
+# # generate agent IDs
+# # source('./Functions/Generate Agent IDs.R')
+# agent_id <- sapply(seq(from = 0, length.out = 1000), FUN = generate_agent_id)
+# 
+# # assign a uniform age structure
+# age <- sample(0:80, 1000, replace = TRUE)
+# 
+# agents <- data.frame(agent_id, age, death_recorded = NA)
+# 
+# test <- reap(agents, mortality_regime = Tsimane)
+# 
+# 
+# ggplot(test$agent_census, aes(x = age)) +
+#   geom_bar(aes(fill = as.factor(death_recorded))) +
+#   labs(fill = "died") +
+#   theme_bw()
