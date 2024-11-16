@@ -185,7 +185,7 @@ select_language_of_conversation_max_proficiency <- function(conversations, pop =
 # agents_in_interaction = a named list of a single vector; one list in the nested interactions_list list. 
 # pop = agents, a data frame of agents and their traits
 
-select_language_at_random_to_speak <- function(agents_in_interaction, pop = agents) {
+select_language_at_random_to_speak <- function(agents_in_interaction, pop) {
   # Extract the relevant columns once
   speaks <- names(pop)[which(startsWith(names(pop), "Speaks"))]
   language_data <- pop[pop$agent_id %in% agents_in_interaction, c("agent_id", speaks)] 
