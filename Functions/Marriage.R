@@ -202,7 +202,7 @@ hist(agent_census[which(is.na(agent_census$spouse_id)),]$age)
 
 ###############################################################################################
 
-#### Functions for Model 3.0 ####
+#### Functions for Model 3.0 - 4.0 ####
 
 # Marry them off, at random
 marry_random <- function(agents){
