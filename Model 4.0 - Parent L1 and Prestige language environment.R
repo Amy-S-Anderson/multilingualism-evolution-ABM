@@ -131,22 +131,22 @@ for(g in seq(generations)){
       agents_in_interaction[other_family_indices] <- select_language_at_random_to_speak(agents_in_interaction[other_family_indices])
       
       # Step 7: Apply Language Choice Rule to agents who are not members of the focal agent's household: Here, speak the prestige language (A) if possible, or if not, pick at random
-      tmp <- agents[which(agents$agent_id %in% agents_in_interaction[other_indices]), ] %>%
+      other_agents_speak <- agents[which(agents$agent_id %in% agents_in_interaction[other_indices]), ] %>%
         mutate(agent_id = as.numeric(agent_id),
                language_chosen = case_when(
           #speak the prestige language if you can.
           !is.na(`Speaks A`) ~ "Speaks A",
           # if you can't speak the prestige language, pick one of your known languages at random. 
-          TRUE ~ select_language_at_random_to_speak(agent_id)
+          TRUE ~ select_language_at_random_to_speak(agent_id, pop = agents)
         )) %>%
         select(agent_id, language_chosen)
       
       # Create a data frame for agents in other_indices
       other_agents_df <- data.frame(agent_id = as.numeric(agents_in_interaction[other_indices]))
       
-      # Join `other_agents_df` with `tmp` to get the `language_chosen` values for each agent
+      # Join `other_agents_df` with `tmp` to get the `language_chosen` values for each agent. Agents will sometimes be named more than once in the agents_in_interaction vector. 
       other_agents_df <- other_agents_df %>%
-        left_join(tmp, by = "agent_id")
+        left_join(other_agents_speak, by = "agent_id")
       
       # Update agents_in_interaction[other_indices] with the matched `language_chosen` values
       agents_in_interaction[other_indices] <- other_agents_df$language_chosen

@@ -93,7 +93,7 @@ for(g in seq(generations)){
     language_of_conversation <- list()
     
     for(i in 1:length(interaction_list)){  
-     #   print(i) # for identifyng where in the for loop code errors are happening. 
+        print(i) # for identifyng where in the for loop code errors are happening. 
       focal_agent <- as.numeric(names(interaction_list[i])) # identify focal agent
       # Identify their family members from the agent trait data frame
       family <- agents[which(agents$household == agents[which(agents$agent_id == focal_agent),]$household & agents$agent_id != focal_agent),]
