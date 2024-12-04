@@ -39,44 +39,29 @@ run_ABM <- function(generations_n,
      birth_new_cohort()
   # There are now 200 agents: 100 25-year-old parents, and 100 newborns -- one child per parent, sharing a household ID. 
   
+  children <- agents[which(agents$generation == max(agents$generation)),] %>%
+    select(household, agent_id) %>%
+    rename("child" = "agent_id")
+  
+  if(parent_language_choice == "L1"){
+    # Record parents' natal language
+    parent_language <- agents[which(!(agents$agent_id %in% children$child)),] %>% select(agent_id, household, age, starts_with("Speaks")) %>%
+      pivot_longer(cols = starts_with("Speaks"), values_to = "fluency", names_to = "parent_language") %>%
+      filter(fluency>0)  %>%
+      rename("parent" = "agent_id") %>%
+      select(household, parent, parent_language) %>%
+      merge(children, by = "household")
+   
+  }
+  
   # Initialize output table
   output <- as.data.frame(matrix(0, nrow = 0, ncol = ncol(agents)))
   names(output) <- names(agents)
   
+  
   # run for generations_n number of generations
   for(g in seq(generations_n)){
     print(paste("generation", g, sep = " ")) # Loop Counter in console will tell you which generation is growing up right now. 
-    
-    
-    children <- agents[which(agents$generation == max(agents$generation)),] %>%
-      select(household, agent_id) %>%
-      rename("child" = "agent_id")
-    parents <- agents[which(agents$generation == min(agents$generation)),] %>%
-      select(household, agent_id) %>%
-      rename("parent" = "agent_id")
-    
-    
-    
-    if(parent_language_choice == "L1"){
-      # Record parents' first language
-      parents_L1 <- agents[which(agents$agent_id %in% parents$parent),] %>% select(agent_id, household, age, starts_with("Speaks")) %>%
-        pivot_longer(cols = starts_with("Speaks"), values_to = "fluency", names_to = "first_language") %>%
-        filter(fluency>0) %>%
-        group_by(agent_id) %>%
-        filter(age == min(age)) %>%
-        rename("parent" = "agent_id") %>%
-        mutate(L1_count = n(),
-               number_of_L1s = case_when(L1_count == 1 ~ "monolingual",
-                                         L1_count == 2 ~ "bilingual",
-                                         L1_count > 2 ~ "multilingual")) %>%
-        mutate(parent_language = if_else(L1_count == 1, first_language, sample(first_language, size = 1))) %>%
-        select(household, parent, parent_language)
-      
-      # parent_language$parent_language = parent's L1
-      parent_language <- merge(parents_L1, children, by = "household")
-    }
-    #### Heidi, Is this the right assumption? Or should each parent speak only a single language to ALL their children? ####
-    
     
     # Set years of model run time.
     generation_time = 25
@@ -128,7 +113,7 @@ run_ABM <- function(generations_n,
         
         # Apply Language Choice Rules
         # Step 4: Apply Others Language Choice Rule to non-parent agents: Here, pick at random
-        #### Non-parents select one of their known languages at random ####
+        #### Language Choice Rule for Agents not speaking to their own parent/child ####
         if(others_language_choice == "random"){
           agents_in_interaction[other_indices] <- select_language_at_random_to_speak(agents_in_interaction[other_indices], pop = agents)
         }
@@ -160,18 +145,19 @@ run_ABM <- function(generations_n,
         
         
         # Step 5: Apply Parental Language Choice Rule to Parent Agents: 
-        #### Parents speak to their children either with a randomly chosen language from their language bank, or in the parent's natal language (L1), as specified in the parent_language data frame earlier in the model.  ####
+        #### Language Choice Rule for Parents speaking to their own Children  ####
         if(length(parent_indices) > 0){
           if(parent_language_choice == "random"){
             agents_in_interaction[parent_indices] <- select_language_at_random_to_speak(agents_in_interaction[parent_indices], pop = agents) 
           }
           if(parent_language_choice == "L1"){
-            agents_in_interaction[parent_indices] <- parents_L1[which(parents_L1$parent == parent$agent_id),]$parent_language
+            agents_in_interaction[parent_indices] <- parent_language[which(parent_language$parent == parent$agent_id),]$parent_language
           }
           
         }
         
       # Step 6: Apply Child--> parent language choice rule to child agents:
+        #### Language Choice Rule for Children speaking to their own Parents ####
         if(length(child_indices) > 0){
           if(child_language_choice == "random"){
             agents_in_interaction[child_indices] <- select_language_at_random_to_speak(agents_in_interaction[child_indices], pop = agents) 
@@ -181,7 +167,7 @@ run_ABM <- function(generations_n,
             
           }
           if(child_language_choice == "L1"){
-            agents_in_interaction[child_indices] <- parents_L1[which(parents_L1$parent == parent$agent_id),]$parent_language
+            agents_in_interaction[child_indices] <- parent_language[which(parent_language$child == child$agent_id),]$parent_language
           }
         }
         
@@ -241,7 +227,7 @@ run_ABM <- function(generations_n,
       agents <- learn_languages_by_listening(annual_listening_experience, pop = agents) 
       agents <- learn_languages_by_speaking(annual_speaking_experience, pop = agents)
       
-      } 
+       
       
       
       # add the census for this year to the running total of data output
@@ -256,9 +242,12 @@ run_ABM <- function(generations_n,
     
     
     ### In year 26:
-    # - The parent generation dies
-    # - The child generation becomes the new parent generation
-    # - A new generation of newborns enters the simulation. 
+    # - The parent generation dies at age 49. 
+    # - The child generation becomes the new parent generation, age 25.
+    # - A new generation of newborns enters the simulation, age 0. 
+    
+    
+    #### *** Parent natal language and child speaking values in each of the three languages (at age 24? (the age right before children become parents)). 
     
     # children become parents in the parent_language data frame. The parent_language variable stays the same, because the new parents will choose to speak to their children in the language they were taught by their parents. 
     parent_language$parent <- parent_language$child
@@ -275,10 +264,10 @@ run_ABM <- function(generations_n,
 
 
 
-test <- run_ABM(generations_n = 3,
-                household_interaction_prob = (1/199),
-                parent_language_choice = "random",
-                child_language_choice = "random",
-                others_language_choice = "random")
-  
-  
+ # test <- run_ABM(generations_n = 1,
+ #                 prop_of_intra_household_interactions = 0.5,
+ #                parent_language_choice = "random",
+ #                child_language_choice = "random",
+ #                others_language_choice = "random")
+ #  
+ #  
