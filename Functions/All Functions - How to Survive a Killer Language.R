@@ -246,45 +246,36 @@ select_language_at_random_to_speak <- function(agents_in_interaction, pop) {
 #### Select Language of greatest speaking ability #### 
 # Function to choose the language with the highest speaking value as each agent's language to speak in a conversation. If an agent's highest speaking value is tied across multiple languages, sample the tied languages at random. 
 # conversations =  a vector of agent IDs, probably from the interactions_list() of dyadic conversation partners
-# pop = agents = the main active data frame of agent attributes
+# pop = the main active data frame of agent attributes
 
-select_language_max_efficacy <- function(conversations, pop = agents) {
+select_language_max_efficacy <- function(conversations, pop) {
   
   # identify the languages in the simulation space
-  languages <- names(agent_census %>% select(starts_with("Speaks")))
+  languages <- names(pop %>% select(starts_with("Speaks")))
   
   # Subset the speaking values for the agents named in 'conversations'
   speakers <- pop[pop$agent_id %in% conversations, c("agent_id", languages)]
   
-  # Identify rows where all language values are NA
+  # Identify rows where agents know at least one language 
   speakers_indices <- which(speakers$agent_id %in% speakers[rowSums(!is.na(speakers[, languages])) > 0, ]$agent_id)
-  NA_indices <- which(!speakers$agent_id %in% speakers[rowSums(!is.na(speakers[, languages])) > 0, ]$agent_id)
+#  NA_indices <- which(!speakers$agent_id %in% speakers[rowSums(!is.na(speakers[, languages])) > 0, ]$agent_id)
   
-  # Identify each agent's highest speaking value 
-  max_proficiency[speakers_indices] <- apply(speakers[speakers_indices, languages], 1, max, na.rm = TRUE)
-  max_proficiency[NA_indices] <- NA
-  
-  # Identify the languages with those highest speaking values for each agent
-  
-  highest_proficiency_languages <- apply(speakers[speakers_indices, languages], 1, function(x) languages[which(x == max(x, na.rm = TRUE))])
-  highest_proficiency_languages[speakers_indices] <- 
-    
-    
-    highest_proficiency_languages <- apply(speakers[, languages], 1, function(x) languages[which(x == max(x, na.rm = TRUE))])
-  
-  # Determine the preferred language for each agent
-  preferred_language <- sapply(1:nrow(speakers), function(i) {
-    if (length(highest_proficiency_languages[i]) < 1) {
-      NA
+  # Identify the languages with the highest speaking values for each agent
+  highest_proficiency_languages <- vector("list", length = length(conversations))
+  highest_proficiency_languages[speakers_indices] <- apply(speakers[speakers_indices, languages], 1, function(x) languages[which(x == max(x, na.rm = TRUE))])
+ 
+   # Determine the preferred language for each agent
+  preferred_language <- sapply(1:nrow(speakers), function(x) {
+    if (length(highest_proficiency_languages[[x]]) < 1) {
+      return(NA)
+    } else if (length(highest_proficiency_languages[[x]]) == 1) {
+      return(highest_proficiency_languages[[x]])
     } else {
-      if (length(highest_proficiency_languages[[i]]) == 1) {
-        highest_proficiency_languages[[i]]
-      } else {
-        # if multiple languages are tied for the highest value, sample from these at random. 
-        sample(highest_proficiency_languages[[i]], 1)
-      }
+      # If multiple languages are tied for the highest value, sample from these at random
+      return(sample(highest_proficiency_languages[[x]], 1))
     }
   })
+  
   return(preferred_language)
 }
 
