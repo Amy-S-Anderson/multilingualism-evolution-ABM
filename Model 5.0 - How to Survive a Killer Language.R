@@ -43,7 +43,7 @@ run_ABM <- function(generations_n,
     select(household, agent_id) %>%
     rename("child" = "agent_id")
   
-  if(parent_language_choice == "L1"){
+ 
     # Record parents' natal language
     parent_language <- agents[which(!(agents$agent_id %in% children$child)),] %>% select(agent_id, household, age, starts_with("Speaks")) %>%
       pivot_longer(cols = starts_with("Speaks"), values_to = "fluency", names_to = "parent_language") %>%
@@ -52,7 +52,7 @@ run_ABM <- function(generations_n,
       select(household, parent, parent_language) %>%
       merge(children, by = "household")
    
-  }
+  
   
   # Initialize output table
   output <- as.data.frame(matrix(0, nrow = 0, ncol = ncol(agents)))
@@ -250,12 +250,13 @@ run_ABM <- function(generations_n,
     #### *** Parent natal language and child speaking values in each of the three languages (at age 24? (the age right before children become parents)). 
     
     # children become parents in the parent_language data frame. The parent_language variable stays the same, because the new parents will choose to speak to their children in the language they were taught by their parents. 
-    parent_language$parent <- parent_language$child
+    
     # Kill the parent generation
     agents <- agents %>%
       filter(generation == max(generation)) %>%
       # birth new cohort (children of new parent cohort)
       birth_new_cohort()  
+    parent_language$parent <- agents[1:100,]$agent_id
     parent_language$child <- agents[101:200,]$agent_id # update the parent_language dataframe with the IDs of the new child generation. 
   }
   
@@ -263,11 +264,10 @@ run_ABM <- function(generations_n,
 }
 
 
-
- # test <- run_ABM(generations_n = 1,
- #                 prop_of_intra_household_interactions = 0.5,
- #                parent_language_choice = "random",
- #                child_language_choice = "random",
- #                others_language_choice = "random")
- #  
- #  
+# 
+#  test <- run_ABM(generations_n = 1,
+#                  prop_of_intra_household_interactions = 0.5,
+#                 parent_language_choice = "random",
+#                 child_language_choice = "random",
+#                 others_language_choice = "random")
+# 
