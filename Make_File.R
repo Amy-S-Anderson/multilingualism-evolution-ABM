@@ -21,7 +21,7 @@ library(data.table)
 # Note: This is one time that you don't want to aim for efficiency by using an apply function rather than repeating code.
 # Run the source() command separately for each function file so that, if something throws an error, the console will give you an error message that tells you exactly which file is glitching when it tries to load. 
 source("./Functions//All Functions - How to Survive a Killer Language.R")
-source("./Model 5.0 - How to Survive a Killer Language.R")
+source("./Model 5.0 - How to Survive a Killer Language.R") # Run_ABM() lives here.
 source("./Functions//Plotting_Functions.R")
 
 
