@@ -26,6 +26,14 @@ set.seed(0)
 # parent_language_choice = a character string denoting the language choice rule used by a parent speaking to their child, either "random" or "L1".
 # child_language_choice = a character string denoting the language choice rule used by a child speaking to their parent, either "random", "best known", or "L1"
 # others_language_choice = a character string denoting the language choice rule used by an agent speaking to any agen who is not their child, either "random", "best known", or "prestige_A". prestige_A means that language A is designated as the prestige language in the simulation. 
+
+
+prop_of_intra_household_interactions = 0.5
+parent_language_choice = "random"
+child_language_choice = "random"
+others_language_choice = "random"
+
+
 run_ABM <- function(generations_n, 
                     prop_of_intra_household_interactions,
                     parent_language_choice,
@@ -38,6 +46,7 @@ run_ABM <- function(generations_n,
     # birth new cohort (children of parent cohort)
      birth_new_cohort()
   # There are now 200 agents: 100 25-year-old parents, and 100 newborns -- one child per parent, sharing a household ID. 
+
   
   children <- agents[which(agents$generation == max(agents$generation)),] %>%
     select(household, agent_id) %>%
@@ -64,7 +73,7 @@ run_ABM <- function(generations_n,
     print(paste("generation", g, sep = " ")) # Loop Counter in console will tell you which generation is growing up right now. 
     
     # Set years of model run time.
-    generation_time = 25
+    generation_time = 4
     for(current_year in seq(generation_time)){
       # print(paste("current_year=", current_year, sep = "")) # Loop Counter will appear in the console to let you know how the model run is progressing. 
       agents$year <- max(agents$year) + 1 
@@ -192,12 +201,11 @@ run_ABM <- function(generations_n,
       
       #### Calculate each agent's annual *speaking* experience with each language ####  
       ### Reorganize speaker/spoken lists so each list contains the languages spoken by the focal agent in each of their dyadic exchanges.
-      #initialize empty list
-      annual_speaking_experience <- list()
+      
       # turn speaker IDs into one long vector for easy indexing
       all_speakers <- interaction_list %>% unname() %>% unlist()
       # do the same with the matching list of languages spoken in each conversation by each speaker
-      all_spoken <- language_of_conversation %>% unname() %>% unlist()
+      all_spoken <- language_of_conversation %>% unlist()
       # rename a vector for agent IDs, for ease
       agent_ids <- names(interaction_list)
       
@@ -208,15 +216,16 @@ run_ABM <- function(generations_n,
         languages_spoken[[i]] <- all_spoken[speaker_index] # identify the languages they chose to speak on each occasion
         
       }
-      names(annual_listening_experience) <- names(agents %>% select(starts_with("Understands")))
+      
       
       # Now, tally up each agent's experience speaking each language this year. 
       #initialize empty list
       annual_speaking_experience <- list()
       for(i_person in 1:length(languages_spoken)){
-        annual_speaking_experience[[i_person]] <- calculate_language_exposures(conversation_languages_vector = language_of_conversation[[i_person]], 
+        annual_speaking_experience[[i_person]] <- calculate_language_exposures(conversation_languages_vector = languages_spoken[[i_person]], 
                                                                                pop = agents)
-      }  
+      
+        }  
       annual_speaking_experience <- as.data.frame(do.call(rbind, annual_speaking_experience))
       names(annual_speaking_experience) <- names(agents %>% select(starts_with("Speaks")))
       
@@ -264,10 +273,13 @@ run_ABM <- function(generations_n,
 }
 
 
-# 
-#  test <- run_ABM(generations_n = 1,
-#                  prop_of_intra_household_interactions = 0.5,
-#                 parent_language_choice = "random",
-#                 child_language_choice = "random",
-#                 others_language_choice = "random")
-# 
+
+###### I BROKE THE LANGUAGE LEARNING FUNCTION. NEED TO FIX!
+
+
+ test <- run_ABM(generations_n = 2,
+                 prop_of_intra_household_interactions = 0.5,
+                parent_language_choice = "random",
+                child_language_choice = "random",
+                others_language_choice = "random")
+
