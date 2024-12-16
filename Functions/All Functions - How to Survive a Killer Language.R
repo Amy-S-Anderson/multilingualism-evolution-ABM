@@ -70,7 +70,7 @@ start_cohort <- function(n, age, n_languages) {
 # Each agent in the parent generation gives birth to one child. 
 birth_new_cohort <- function(agent_census){
   # Create a data frame with a single row of NA values
-  newborns <- data.frame(matrix(NA, nrow = length(agent_census[which(agent_census$age == 25),]$age), ncol = ncol(agent_census)))
+  newborns <- data.frame(matrix(0, nrow = length(agent_census[which(agent_census$age == 25),]$age), ncol = ncol(agent_census)))
   # Set the column names to match those of agent_census
   colnames(newborns) <- colnames(agent_census)
   
@@ -202,17 +202,20 @@ get_interaction_lists <- function(interaction_matrix, agents) {
 
 select_language_at_random_to_speak <- function(agents_in_interaction, pop) {
   # Extract the relevant columns once
-  speaks <- names(pop)[which(startsWith(names(pop), "Speaks"))]
-  language_data <- pop[pop$agent_id %in% agents_in_interaction, c("agent_id", speaks)] 
+  understands <- names(pop)[which(startsWith(names(pop), "Understands"))]
+  
+  language_data <- pop[pop$agent_id %in% agents_in_interaction, c("agent_id", understands)] 
   
   language_data <- language_data %>%
-    pivot_longer(cols = starts_with("Speaks"), names_to = "can_speak", values_to = "Transmission") %>%
+    pivot_longer(cols = starts_with("Understands"), names_to = "can_speak", values_to = "Transmission") %>%
+    mutate(speak_binary = if_else(Transmission > 15, 1, 0)) %>%
     group_by(agent_id) %>%
-    mutate(Transmission_sum = sum(Transmission, na.rm = TRUE))
+    mutate(speaks_any = if_else(sum(speak_binary) > 0, 1,0))
+  
   
   # Identify agents who cannot speak any language
-  if (nrow(language_data[which(language_data$Transmission_sum == 0), ]) > 0) {
-    speechless <- data.frame(agent_id = language_data[which(language_data$Transmission_sum == 0),]$agent_id, 
+  if (nrow(language_data[which(language_data$speaks_any == 0), ]) > 0) {
+    speechless <- data.frame(agent_id = language_data[which(language_data$speaks_any == 0),]$agent_id, 
                              spoken = NA) %>% distinct()
   } else {
     # If no speechless agents, initialize an empty data frame
@@ -220,9 +223,9 @@ select_language_at_random_to_speak <- function(agents_in_interaction, pop) {
   }
   
   # Identify agents who can speak at least one language
-  if (nrow(language_data[which(language_data$Transmission_sum > 0), ]) > 0) {
+  if (nrow(language_data[which(language_data$speaks_any > 0), ]) > 0) {
     speakers <- language_data %>%
-      filter(Transmission > 0) %>% 
+      filter(speaks_any > 0) %>% 
       group_by(agent_id) %>%
       summarise(spoken = sample(can_speak, size = 1)) %>%
       ungroup()
@@ -314,20 +317,29 @@ calculate_language_exposures <- function(conversation_languages_vector, pop,
   relative_exposures <- NA
   
   for(lang in seq(languages)){
-    exposure_count[lang] <- length(conversation_languages_vector[which(conversation_languages_vector == languages[lang])])
+    if(length(conversation_languages_vector[which(conversation_languages_vector == languages[lang])]) > 0){
+      exposure_count[lang] <- length(conversation_languages_vector[which(conversation_languages_vector == languages[lang])])
+    } 
+    if(length(conversation_languages_vector[which(conversation_languages_vector == languages[lang])]) == 0){
+      exposure_count[lang] <- 0
+    }
+    
   }
   
   if(absolute_exposure == TRUE){ 
     relative_exposures <- (exposure_count / saturation_exposure)^non_linear_scaling
     if(relative_exposures < 1) {relative_exposures <- 1} # cap the possible proficiency gains for agents who exceed the saturation exposure for a language
-  } else{relative_exposures <- (exposure_count / max(exposure_count))^non_linear_scaling }
+  } else{
+    relative_exposures <- if(max(exposure_count) == 0){
+    exposure_count} else{(exposure_count / max(exposure_count))^non_linear_scaling }
+  }
   
   return(relative_exposures)
 }
 
 
 
-
+ #test <- calculate_language_exposures(conversation_languages_vector, agents)
 
 
 
@@ -346,8 +358,7 @@ learn_languages_by_listening <- function(language_exposures, pop){
   
   pop_languages <- names(pop %>% select(starts_with("Understands")))
   for(lang in pop_languages){
-    pop[,lang] <- case_when(is.na(pop[,lang]) & language_exposures[lang] > 0 ~ age_rate[pop$age + 1] * language_exposures[lang], # if they encountered it for the first time this year, then replace NA with the language gain from this year.
-                            TRUE ~ pop[,lang] + age_rate[pop$age + 1] * language_exposures[lang]) # if they already have a value for this language, add this year's gain to the existing value
+    pop[,lang] <- pop[,lang] + age_rate[pop$age + 1] * language_exposures[lang] # if they already have a value for this language, add this year's gain to the existing value
     pop[,lang] <- case_when(pop[,lang] > 100 ~ 100, # set a proficiency ceiling at 100
                             TRUE ~ as.numeric(pop[,lang]))
   }
@@ -362,6 +373,7 @@ learn_languages_by_listening <- function(language_exposures, pop){
 
 
 # Just like the function above, but with a two year lag time to account for the necessary scaffolding of understanding before speaking begins
+# rate_function = a character string. Either "constant" or "age_dependent"
 learn_languages_by_speaking <- function(language_exposures, pop){
   
   # Effect of age on language learning rate
@@ -380,16 +392,15 @@ learn_languages_by_speaking <- function(language_exposures, pop){
     
     # Apply the logic
     pop[[speak_col]] <- case_when(
-      pop[[understand_col]] < 15 ~ NA_real_, # Set NA if Understands < 20, roughly the understanding level of a two-year-old. 
-      pop[[understand_col]] >= 15 & is.na(pop[[speak_col]]) & language_exposures[[speak_col]] > 0 ~ age_rate[pop$age + 1] * language_exposures[[speak_col]], # New language learning
+      pop[[understand_col]] < 15 ~ 0, # Set NA if Understands < 15, roughly the understanding level of a two-year-old. 
       pop[[understand_col]] >= 15 ~ pop[[speak_col]] + age_rate[pop$age + 1] * language_exposures[[speak_col]], # Update existing proficiency
-      TRUE ~ pop[[speak_col]] # Default case
+      .default = pop[[speak_col]] # Default case
     )
     
     # Apply proficiency ceiling
     pop[[speak_col]] <- case_when(
       pop[[speak_col]] > 100 ~ 100, # Cap proficiency at 100
-      TRUE ~ pop[[speak_col]]
+      .default = pop[[speak_col]]
     )
   }
   return(pop)
