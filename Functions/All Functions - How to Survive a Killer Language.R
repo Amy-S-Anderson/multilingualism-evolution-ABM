@@ -36,6 +36,7 @@ start_cohort <- function(n, age, n_languages) {
            generation = 0)
   
   # Create columns for language proficiency variables
+  # Note: This can only handle up to 9 languages. More than this, and you will need to change the chartr() arguments. 
   languages <- c(paste("Speaks", chartr("123456789", "ABCDEFGHI", seq(n_languages)), sep = " "),
                  paste("Understands", chartr("123456789", "ABCDEFGHI", seq(n_languages)), sep = " ")
   )
@@ -70,13 +71,13 @@ start_cohort <- function(n, age, n_languages) {
 # Each agent in the parent generation gives birth to one child. 
 birth_new_cohort <- function(agent_census){
   # Create a data frame with a single row of NA values
-  newborns <- data.frame(matrix(0, nrow = length(agent_census[which(agent_census$age == 25),]$age), ncol = ncol(agent_census)))
+  newborns <- data.frame(matrix(0, nrow = nrow(agent_census[which(agent_census$generation == max(agent_census$generation, na.rm = T)),]), ncol = ncol(agent_census)))
   # Set the column names to match those of agent_census
   colnames(newborns) <- colnames(agent_census)
   
-  newborns$household <- unique(agent_census[which(agent_census$age == 25),]$household)
+  newborns$household <- unique(agent_census[which(agent_census$generation == max(agent_census$generation)),]$household)
   newborns$agent_id <- sapply(seq(from = max(agent_census$agent_id), #as.numeric(substr(agent_census$agent_id, 4, nchar(agent_census$agent_id)))),
-                                  length.out = length(agent_census[which(agent_census$age == 25),]$age) ), 
+                                  length.out = nrow(agent_census[agent_census$generation == max(agent_census$generation),]) ), 
                               generate_agent_id)
   newborns$year <- agent_census$year
   newborns$age <- 0
@@ -200,46 +201,26 @@ get_interaction_lists <- function(interaction_matrix, agents) {
 # agents_in_interaction = a named list of a single vector; one list in the nested interactions_list list. 
 # pop = a data frame of agents and their traits. Must include columns for language speaking skills and language understanding skills in each language that exists within the simulation. 
 
-select_language_at_random_to_speak <- function(agents_in_interaction, pop) {
-  # Extract the relevant columns once
+select_random_language = function(agents_to_speak, pop) {
+  #get column names for degree of language understood
   understands <- names(pop)[which(startsWith(names(pop), "Understands"))]
   
-  language_data <- pop[pop$agent_id %in% agents_in_interaction, c("agent_id", understands)] 
+  #extract degree of language understanding for each agent interacting with focal agent
+  language_data <- pop[match(agents_to_speak, pop$agent_id), c("agent_id", understands)]
   
-  language_data <- language_data %>%
-    pivot_longer(cols = starts_with("Understands"), names_to = "can_speak", values_to = "Transmission") %>%
-    mutate(speak_binary = if_else(Transmission > 15, 1, 0)) %>%
-    group_by(agent_id) %>%
-    mutate(speaks_any = if_else(sum(speak_binary) > 0, 1,0))
+  #calculate sampling weights for each agent choosing the language (this will be 0 or 1)
+  language_weights = matrix(0, nrow=nrow(language_data), ncol=length(understands))
+  language_weights[language_data[,understands]>15] = 1
   
+  has_speech = rowSums(language_weights) != 0 #vector of true/false, corresponding to agents_to_speak (and to rows in language_weights)
   
-  # Identify agents who cannot speak any language
-  if (nrow(language_data[which(language_data$speaks_any == 0), ]) > 0) {
-    speechless <- data.frame(agent_id = language_data[which(language_data$speaks_any == 0),]$agent_id, 
-                             spoken = NA) %>% distinct()
-  } else {
-    # If no speechless agents, initialize an empty data frame
-    speechless <- data.frame(agent_id = character(0), spoken = character(0))
+  #Sample spoken language, or use "none" if speechless
+  spoken = rep("none", length(agents_to_speak)) #Replace "none" with whatever you want speechless agents to use
+  if (any(has_speech)) { #only sample languages if at least one interacting agent has speech
+    spoken[has_speech] = apply(language_weights[has_speech,,drop=FALSE], 1, function(probs) {paste0("Speaks ", 
+                                                                                                    sample(str_sub(understands, -1, -1), 1, 
+                                                                                                           prob=probs))})
   }
-  
-  # Identify agents who can speak at least one language
-  if (nrow(language_data[which(language_data$speaks_any > 0), ]) > 0) {
-    speakers <- language_data %>%
-      filter(speaks_any > 0) %>% 
-      group_by(agent_id) %>%
-      summarise(spoken = sample(can_speak, size = 1)) %>%
-      ungroup()
-  } else {
-    # If no speakers, initialize an empty data frame
-    speakers <- data.frame(agent_id = character(0), spoken = character(0))
-  }
-  
-  # Combine the results
-  language_chosen <- rbind(speakers, speechless) 
-  
-  # Ensure the order matches the original agents_in_interaction order
-  spoken <- language_chosen$spoken[match(agents_in_interaction, language_chosen$agent_id)] 
-  
   return(spoken)
 }
 
@@ -248,39 +229,49 @@ select_language_at_random_to_speak <- function(agents_in_interaction, pop) {
 
 #### Select Language of greatest speaking ability #### 
 # Function to choose the language with the highest speaking value as each agent's language to speak in a conversation. If an agent's highest speaking value is tied across multiple languages, sample the tied languages at random. 
-# conversations =  a vector of agent IDs, probably from the interactions_list() of dyadic conversation partners
+# agents_to_speak =  a vector of agent IDs, probably from the interactions_list() of dyadic conversation partners
 # pop = the main active data frame of agent attributes
 
-select_language_max_efficacy <- function(conversations, pop) {
+select_best_language = function(agents_to_speak, pop) {
+  #get column names for degree of language understood
+  understands <- names(pop)[which(startsWith(names(pop), "Understands"))]
+  #get column names for degree of language spoken
+  speaks <- names(pop %>% select(starts_with("Speaks")))
   
-  # identify the languages in the simulation space
-  languages <- names(pop %>% select(starts_with("Speaks")))
+  #extract degree of language understanding for each agent interacting with focal agent
+  understanding_data <- pop %>% 
+    filter(agent_id %in% agents_to_speak) %>%
+    select(agent_id, all_of(understands)) %>%
+    pivot_longer(cols = understands, names_to = "understands", values_to = "skill_level")
   
-  # Subset the speaking values for the agents named in 'conversations'
-  speakers <- pop[pop$agent_id %in% conversations, c("agent_id", languages)]
+  speaking_data <- pop %>% 
+    filter(agent_id %in% agents_to_speak) %>%
+    select(agent_id, all_of(speaks)) %>%
+    pivot_longer(cols = speaks, names_to = "speaks", values_to = "speaking_level")
   
-  # Identify rows where agents know at least one language 
-  speakers_indices <- which(speakers$agent_id %in% speakers[rowSums(!is.na(speakers[, languages])) > 0, ]$agent_id)
-#  NA_indices <- which(!speakers$agent_id %in% speakers[rowSums(!is.na(speakers[, languages])) > 0, ]$agent_id)
+  language_data <- merge(understanding_data, speaking_data, by = "agent_id") %>%
+    filter(skill_level > 15) %>%
+    group_by(agent_id) %>%
+    filter(speaking_level == max(speaking_level, na.rm = T)) %>%
+    mutate(chosen_language = sample(speaks, size = 1)) %>%
+    select(agent_id, chosen_language)
   
-  # Identify the languages with the highest speaking values for each agent
-  highest_proficiency_languages <- vector("list", length = length(conversations))
-  highest_proficiency_languages[speakers_indices] <- apply(speakers[speakers_indices, languages], 1, function(x) languages[which(x == max(x, na.rm = TRUE))])
- 
-   # Determine the preferred language for each agent
-  preferred_language <- sapply(1:nrow(speakers), function(x) {
-    if (length(highest_proficiency_languages[[x]]) < 1) {
-      return(NA)
-    } else if (length(highest_proficiency_languages[[x]]) == 1) {
-      return(highest_proficiency_languages[[x]])
-    } else {
-      # If multiple languages are tied for the highest value, sample from these at random
-      return(sample(highest_proficiency_languages[[x]], 1))
-    }
-  })
+  spoken = rep("none", length(agents_to_speak))
+  has_speech = which(agents_to_speak %in% language_data$agent_id) #vector of true/false, corresponding to agents_to_speak
+  if(nrow(language_data) > 0){   #only sample languages if at least one interacting agent has speech
+    # Match agents_to_speak with their chosen language
+    chosen_languages <- language_data$chosen_language[match(agents_to_speak[has_speech], language_data$agent_id)]
+    
+    # Assign chosen languages to the respective positions in the spoken vector
+    spoken[has_speech] <- chosen_languages
+    
+  }
   
-  return(preferred_language)
+  return(spoken)
 }
+
+
+
 
 
 
