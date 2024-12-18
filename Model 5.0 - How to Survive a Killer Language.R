@@ -32,7 +32,7 @@ prop_of_intra_household_interactions = 0.5
 parent_language_choice = "random"
 child_language_choice = "random"
 others_language_choice = "random"
-
+generations_n = 2
 
 run_ABM <- function(generations_n, 
                     prop_of_intra_household_interactions,
@@ -73,7 +73,7 @@ run_ABM <- function(generations_n,
     print(paste("generation", g, sep = " ")) # Loop Counter in console will tell you which generation is growing up right now. 
     
     # Set years of model run time.
-    generation_time = 4
+    generation_time = 5
     for(current_year in seq(generation_time)){
       # print(paste("current_year=", current_year, sep = "")) # Loop Counter will appear in the console to let you know how the model run is progressing. 
       agents$year <- max(agents$year) + 1 
@@ -124,10 +124,10 @@ run_ABM <- function(generations_n,
         # Step 4: Apply Others Language Choice Rule to non-parent agents: Here, pick at random
         #### Language Choice Rule for Agents not speaking to their own parent/child ####
         if(others_language_choice == "random"){
-          agents_in_interaction[other_indices] <- select_language_at_random_to_speak(agents_in_interaction[other_indices], pop = agents)
+          agents_in_interaction[other_indices] <- select_random_language(agents_in_interaction[other_indices], pop = agents)
         }
         if(others_language_choice == "best_known"){
-          agents_in_interaction[other_indices] <- select_language_max_efficacy(agents_in_interaction[other_indices], pop = agents)
+          agents_in_interaction[other_indices] <- select_best_language(agents_in_interaction[other_indices], pop = agents)
         }
         if(others_language_choice == "prestige_A"){
           # see who can speak the prestige language variant.
@@ -137,7 +137,7 @@ run_ABM <- function(generations_n,
                      #speak the prestige language if you can.
                      !is.na(`Speaks A`) ~ "Speaks A",
                      # if you can't speak the prestige language, speak the language you know best. 
-                     TRUE ~ select_language_max_efficacy(agent_id, pop = agents)
+                     TRUE ~ select_best_language(agent_id, pop = agents)
                    )) %>%
             select(agent_id, language_chosen)
           
@@ -157,7 +157,7 @@ run_ABM <- function(generations_n,
         #### Language Choice Rule for Parents speaking to their own Children  ####
         if(length(parent_indices) > 0){
           if(parent_language_choice == "random"){
-            agents_in_interaction[parent_indices] <- select_language_at_random_to_speak(agents_in_interaction[parent_indices], pop = agents) 
+            agents_in_interaction[parent_indices] <- select_random_language(agents_in_interaction[parent_indices], pop = agents) 
           }
           if(parent_language_choice == "L1"){
             agents_in_interaction[parent_indices] <- parent_language[which(parent_language$parent == parent$agent_id),]$parent_language
@@ -169,10 +169,10 @@ run_ABM <- function(generations_n,
         #### Language Choice Rule for Children speaking to their own Parents ####
         if(length(child_indices) > 0){
           if(child_language_choice == "random"){
-            agents_in_interaction[child_indices] <- select_language_at_random_to_speak(agents_in_interaction[child_indices], pop = agents) 
+            agents_in_interaction[child_indices] <- select_random_language(agents_in_interaction[child_indices], pop = agents) 
           }
           if(child_language_choice == "best_known"){
-            agents_in_interaction[child_indices] <- select_language_max_efficacy(agents_in_interaction[child_indices], pop = agents)
+            agents_in_interaction[child_indices] <- select_best_language(agents_in_interaction[child_indices], pop = agents)
             
           }
           if(child_language_choice == "L1"){
@@ -264,7 +264,7 @@ run_ABM <- function(generations_n,
     agents <- agents %>%
       filter(generation == max(generation)) %>%
       # birth new cohort (children of new parent cohort)
-      birth_new_cohort()  
+     birth_new_cohort()  
     parent_language$parent <- agents[1:100,]$agent_id
     parent_language$child <- agents[101:200,]$agent_id # update the parent_language dataframe with the IDs of the new child generation. 
   }
@@ -274,7 +274,6 @@ run_ABM <- function(generations_n,
 
 
 
-###### I BROKE THE LANGUAGE LEARNING FUNCTION. NEED TO FIX!
 
 
  test <- run_ABM(generations_n = 2,
