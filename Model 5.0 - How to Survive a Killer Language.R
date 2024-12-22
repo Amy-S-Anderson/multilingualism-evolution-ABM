@@ -16,25 +16,30 @@
 # - Speak the language in which you have the highest speaking ability. ('best known')
 # - Speak the prestige language variant. (which is language A)
 
-set.seed(0)
+# set.seed(0)
 
 
 # Every year, everyone picks their partners (with replacement) for ten conversations. However, because every agent gets this opportunity, an agent is likely to be named among the ten spots of another agent, so almost everyone has more than ten conversations. On average, agents have 22 dyadic conversations a year. 
 # Conversation partners do not need to coordinate on a single language within their conversation. Each agent chooses their own language to speak in each conversation independently of their conversation partner's choice. 
 
+# generations_n = an integer, the number of generations to run the model
+# generation_size = an integer, the number of agents in a generation. 
 # prop_of_intra_household_interactions = a proportion between 0 and 1 that determines the average percent of each agent's conversations that are with the other member of their own household (their parent, if a child; or their child, if a parent), rather than with members of the community outside their own household. 
 # parent_language_choice = a character string denoting the language choice rule used by a parent speaking to their child, either "random" or "L1".
 # child_language_choice = a character string denoting the language choice rule used by a child speaking to their parent, either "random", "best known", or "L1"
 # others_language_choice = a character string denoting the language choice rule used by an agent speaking to any agen who is not their child, either "random", "best known", or "prestige_A". prestige_A means that language A is designated as the prestige language in the simulation. 
 
-
+generation_size = 20
+languages_n = 2
 prop_of_intra_household_interactions = 0.5
 parent_language_choice = "random"
 child_language_choice = "random"
 others_language_choice = "random"
 generations_n = 2
 
-run_ABM <- function(generations_n, 
+run_ABM <- function(generations_n,
+                    generation_size,
+                    languages_n,
                     prop_of_intra_household_interactions,
                     parent_language_choice,
                     child_language_choice,
@@ -42,26 +47,16 @@ run_ABM <- function(generations_n,
   
   #### GENERATE POPULATION DEMOGRAPHY #### 
   # Generate first parent cohort, all age 25, all monolingual in one of five languages (A-E)
-  agents <- start_cohort(n = 100, age = 25, n_languages = 3) %>%
-    # birth new cohort (children of parent cohort)
-     birth_new_cohort()
+  agents <- start_cohort(n = generation_size, age = 25, n_languages = languages_n) 
+    
+  # Determine heritage language for each household
+  heritage_language <- agents %>%
+      pivot_longer(cols = starts_with('Speaks'), names_to = "L1", values_to = "speaking_skill") %>%
+      filter(speaking_skill > 0) %>%
+      select(household, L1)
+  # birth new cohort (children of parent cohort)
+  agents <- birth_new_cohort(agents, parent_age = 25)
   # There are now 200 agents: 100 25-year-old parents, and 100 newborns -- one child per parent, sharing a household ID. 
-
-  
-  children <- agents[which(agents$generation == max(agents$generation)),] %>%
-    select(household, agent_id) %>%
-    rename("child" = "agent_id")
-  
- 
-    # Record parents' natal language
-    parent_language <- agents[which(!(agents$agent_id %in% children$child)),] %>% select(agent_id, household, age, starts_with("Speaks")) %>%
-      pivot_longer(cols = starts_with("Speaks"), values_to = "fluency", names_to = "parent_language") %>%
-      filter(fluency>0)  %>%
-      rename("parent" = "agent_id") %>%
-      select(household, parent, parent_language) %>%
-      merge(children, by = "household")
-   
-  
   
   # Initialize output table
   output <- as.data.frame(matrix(0, nrow = 0, ncol = ncol(agents)))
@@ -73,7 +68,7 @@ run_ABM <- function(generations_n,
     print(paste("generation", g, sep = " ")) # Loop Counter in console will tell you which generation is growing up right now. 
     
     # Set years of model run time.
-    generation_time = 5
+    generation_time = 25
     for(current_year in seq(generation_time)){
       # print(paste("current_year=", current_year, sep = "")) # Loop Counter will appear in the console to let you know how the model run is progressing. 
       agents$year <- max(agents$year) + 1 
@@ -157,10 +152,14 @@ run_ABM <- function(generations_n,
         #### Language Choice Rule for Parents speaking to their own Children  ####
         if(length(parent_indices) > 0){
           if(parent_language_choice == "random"){
-            agents_in_interaction[parent_indices] <- select_random_language(agents_in_interaction[parent_indices], pop = agents) 
+            agents_in_interaction[parent_indices] <- select_random_language(agents_in_interaction[parent_indices], 
+                                                                            pop = agents) 
           }
           if(parent_language_choice == "L1"){
-            agents_in_interaction[parent_indices] <- parent_language[which(parent_language$parent == parent$agent_id),]$parent_language
+            agents_in_interaction[parent_indices] <- select_heritage_language(agents_in_interaction[parent_indices], 
+                                                                              pop = agents, 
+                                                                              heritage_language, 
+                                                                              threshold_of_ability = 100) 
           }
           
         }
@@ -176,7 +175,10 @@ run_ABM <- function(generations_n,
             
           }
           if(child_language_choice == "L1"){
-            agents_in_interaction[child_indices] <- parent_language[which(parent_language$child == child$agent_id),]$parent_language
+            agents_in_interaction[child_indices] <- select_best_language(agents_in_interaction[child_indices], 
+                                                                         pop = agents,
+                                                                         heritage_language,
+                                                                         threshold_of_ability = 0)
           }
         }
         
@@ -262,11 +264,10 @@ run_ABM <- function(generations_n,
     
     # Kill the parent generation
     agents <- agents %>%
-      filter(generation == max(generation)) %>%
+      # i.e., retain only the most recent generation
+      filter(agent_id %in% (max(agent_id - generation_size + 1):max(agent_id))) %>%
       # birth new cohort (children of new parent cohort)
-     birth_new_cohort()  
-    parent_language$parent <- agents[1:100,]$agent_id
-    parent_language$child <- agents[101:200,]$agent_id # update the parent_language dataframe with the IDs of the new child generation. 
+     birth_new_cohort(parent_age = 25)  
   }
   
   return(output)
@@ -276,7 +277,9 @@ run_ABM <- function(generations_n,
 
 
 
- test <- run_ABM(generations_n = 2,
+ test <- run_ABM(generations_n = 1,
+                 generation_size = 20,
+                 languages_n = 4,
                  prop_of_intra_household_interactions = 0.5,
                 parent_language_choice = "random",
                 child_language_choice = "random",
