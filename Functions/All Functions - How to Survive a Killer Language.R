@@ -32,8 +32,7 @@ start_cohort <- function(n, age, n_languages) {
     mutate(age = age,
            # initiate year record
            year = 0,
-           household = seq(from = 1, length.out = n),
-           generation = 0)
+           household = seq(from = 1, length.out = n))
   
   # Create columns for language proficiency variables
   # Note: This can only handle up to 9 languages. More than this, and you will need to change the chartr() arguments. 
@@ -67,23 +66,25 @@ start_cohort <- function(n, age, n_languages) {
 
 #### Birth a new generation of agents ####
 
-# This function, like the ones above, expects a data frame of agent traits. T
+# This function, like the ones above, expects a data frame of agent traits. 
+# parent_age = identifies the age of reproduction. Only agents who are this age will become new parents. 
 # Each agent in the parent generation gives birth to one child. 
-birth_new_cohort <- function(agent_census){
-  # Create a data frame with a single row of NA values
-  newborns <- data.frame(matrix(0, nrow = nrow(agent_census[which(agent_census$generation == max(agent_census$generation, na.rm = T)),]), ncol = ncol(agent_census)))
-  # Set the column names to match those of agent_census
-  colnames(newborns) <- colnames(agent_census)
+birth_new_cohort <- function(pop, parent_age){
+  # Create a data frame with a single row of NA values.
+  parents <- pop[which(pop$age == parent_age),]$agent_id
+  if(length(parents) == 0){
+    print("No agents are old enough to become new parents!")
+  }
+  newborns <- data.frame(matrix(0, nrow = length(parents), ncol = ncol(pop)))
+  # Set the column names to match those of pop
+  colnames(newborns) <- colnames(pop)
   
-  newborns$household <- unique(agent_census[which(agent_census$generation == max(agent_census$generation)),]$household)
-  newborns$agent_id <- sapply(seq(from = max(agent_census$agent_id), #as.numeric(substr(agent_census$agent_id, 4, nchar(agent_census$agent_id)))),
-                                  length.out = nrow(agent_census[agent_census$generation == max(agent_census$generation),]) ), 
-                              generate_agent_id)
-  newborns$year <- agent_census$year
+  newborns$household <- unique(pop[which(pop$agent_id == parents),]$household)
+  newborns$agent_id <- sapply(seq(from = max(pop$agent_id), length.out = length(parents)), function(x) generate_agent_id(start_value = x))
+  newborns$year <- pop[which(pop$age == parent_age),]$year
   newborns$age <- 0
-  newborns$generation <- max(agent_census$generation) + 1
-  
-  updated_agents_census <- rbind(agent_census, newborns)
+
+  updated_agents_census <- rbind(pop, newborns)
   return(updated_agents_census)
 }
 
@@ -227,7 +228,7 @@ select_random_language = function(agents_to_speak, pop) {
 
 
 
-#### Select Language of greatest speaking ability #### 
+#### Select best-known Language #### 
 # Function to choose the language with the highest speaking value as each agent's language to speak in a conversation. If an agent's highest speaking value is tied across multiple languages, sample the tied languages at random. 
 # agents_to_speak =  a vector of agent IDs, probably from the interactions_list() of dyadic conversation partners
 # pop = the main active data frame of agent attributes
@@ -270,6 +271,73 @@ select_best_language = function(agents_to_speak, pop) {
   return(spoken)
 }
 
+
+
+
+
+#### Select Heritage Language #### 
+# Function to determine whether an agent has enough knowledge of their household's heritage language to choose to speak it in conversation with another agent. The knowledge threshold for this choice can be set at any value between 0 and 100. 
+# If an agent *can* speak their heritage language well enough, then they will speak it. If they don't know their heritage language well enough, then they will default to speaking the language that they know best. 
+
+
+# agents_to_speak = vector of agent IDs
+# pop = data frame of agents (rows) and their traits (columns)
+# heritage language = a data frame of two columns: household ID and name of that household's heritage language (the language assigned to the monolingual ancestor in the immaculate conception generation (generation 1))
+# threshold_of_ability = a number between 0 and 100. The speaking value above which an agent *can* choose to speak their heritage language. This is likely to be quite high for parents choosing whether to speak this language to their children, but can be 0 for children just beginning to learn the language. 
+
+
+select_heritage_language <- function(agents_to_speak, pop, heritage_language, threshold_of_ability){
+  #get column names for degree of language understood
+  understands <- names(pop)[which(startsWith(names(pop), "Understands"))]
+  #get column names for degree of language spoken
+  speaks <- names(pop %>% select(starts_with("Speaks")))
+  
+  #extract degree of language understanding for each agent interacting with focal agent
+  understanding_data <- pop %>% 
+    filter(agent_id %in% agents_to_speak) %>%
+    select(agent_id, all_of(understands)) %>%
+    pivot_longer(cols = understands, names_to = "understands", values_to = "skill_level") %>%
+    filter(skill_level > (100/12) * 2) # retains only rows with data on a language that an agent understands well enough to speak it.
+  
+  # extract each agent's degree of speaking skill in each language.
+  speaking_data <- pop %>% 
+    filter(agent_id %in% understanding_data$agent_id) %>%
+    select(agent_id, all_of(speaks), household) %>%
+    pivot_longer(cols = speaks, names_to = "speaks", values_to = "speaking_level") %>%
+    group_by(agent_id) %>%
+    # identify which language is their best known language (and if languages are tied for best known, pick one of them)
+    mutate(best_known = sample(speaks[which.max(speaking_level)], 1))
+  
+  #identify the heritage language in each household
+  heritage = pop %>%
+    filter(agent_id %in% understanding_data$agent_id) %>%
+    merge(heritage_language, by = "household") %>%
+    select(agent_id, L1)
+  
+  # identify hertiage language speakers in the agents_to_speak vector
+  speaker_options <- speaking_data %>%
+    merge(heritage_language, by = "household") %>%
+    group_by(agent_id) %>%
+    mutate(heritage_speaker = if_else(any(speaks == L1 & speaking_level > threshold_of_ability),"yes", "no")) %>%
+    select(agent_id, best_known, heritage_speaker, L1) %>%
+    distinct() %>%
+    mutate(spoken = if_else(heritage_speaker == "yes", L1, best_known)) %>%
+    select(agent_id, spoken) 
+  
+  
+  has_speech <- which(agents_to_speak %in% understanding_data$agent_id)  # Vector of true/false, corresponding to agents_to_speak
+  # Match the chosen language to the agents_to_speak
+  spoken <- rep("none", length(agents_to_speak))
+  if (nrow(speaker_options) > 0) {  # Only assign languages if at least one agent has a valid choice
+    # Match agents_to_speak with their chosen language
+    chosen_languages <- speaker_options$spoken[match(agents_to_speak[has_speech], speaker_options$agent_id)]
+    
+    # Assign chosen languages to the respective positions in the spoken vector
+    spoken[has_speech] <- chosen_languages
+  }
+  
+  return(spoken)
+}
 
 
 
@@ -334,22 +402,23 @@ calculate_language_exposures <- function(conversation_languages_vector, pop,
 
 
 
+
+
 #### Update agents' Language Values ####
+
+
 # This function updates individual agents' Understanding values for each language, as a function of their age and their exposure to each language in this step of model time.
 # language exposures = a data frame produced by the 'calculate language exposures' function. It contains a row for each agent and a column for each language, populated with numeric values for language exposure. 
 # pop = a data frame of agent traits
 # language_skill = a character string, either "Understands" or "Speaks"
-learn_languages_by_listening <- function(language_exposures, pop){
-  
-  # effect of age on language learning rate -- THIS WILL CHANGE once I have more information from linguists. 
-  ages = seq(from = 0, to = 51, by = 1)
-  params <- data.frame(d = 18, a = 0.2, r0 = 9)
-  age_rate <-  params$r0 * (1 - (1 / (1 + exp(-params$a * (ages - params$d))))) + 10 # baseline 10% annually under conditions of maximal immersion, regardless of age
-  #### Also, need to make sure Understanding reaches toddler level before Speaking can be populated. 
-  
+
+
+# Keeping it simple and going with a constant (age-independent) rate of learning. Assume that an agent who enters a monolingual environment will gain complete mastery of the language in 12 years, regardless of the age at which they enter that environment.
+
+learn_languages_by_listening <- function(language_exposures, pop, learning_rate = 100/12){
   pop_languages <- names(pop %>% select(starts_with("Understands")))
   for(lang in pop_languages){
-    pop[,lang] <- pop[,lang] + age_rate[pop$age + 1] * language_exposures[lang] # if they already have a value for this language, add this year's gain to the existing value
+    pop[,lang] <- pop[,lang] + learning_rate * language_exposures[lang] # if they already have a value for this language, add this year's gain to the existing value
     pop[,lang] <- case_when(pop[,lang] > 100 ~ 100, # set a proficiency ceiling at 100
                             TRUE ~ as.numeric(pop[,lang]))
   }
@@ -360,17 +429,11 @@ learn_languages_by_listening <- function(language_exposures, pop){
 
 
 
-
-
-
 # Just like the function above, but with a two year lag time to account for the necessary scaffolding of understanding before speaking begins
-# rate_function = a character string. Either "constant" or "age_dependent"
-learn_languages_by_speaking <- function(language_exposures, pop){
-  
-  # Effect of age on language learning rate
-  ages <- seq(from = 0, to = 51, by = 1)
-  params <- data.frame(d = 18, a = 0.2, r0 = 9)
-  age_rate <- params$r0 * (1 - (1 / (1 + exp(-params$a * (ages - params$d))))) + 0.5
+learn_languages_by_speaking <- function(language_exposures, pop, learning_rate = 100/12){ 
+ 
+  # speech_threshold = the speaking skill value of a monolingually exposed two-year-old. Once an agent reaches this value in their understanding skill of a language, they can choose to speak this language in interactions with other agents.  
+  speech_threshold = learning_rate * 2
   
   # Columns for 'Speaks' and 'Understands'
   pop_speaks <- names(pop %>% select(starts_with("Speaks")))
@@ -383,8 +446,8 @@ learn_languages_by_speaking <- function(language_exposures, pop){
     
     # Apply the logic
     pop[[speak_col]] <- case_when(
-      pop[[understand_col]] < 15 ~ 0, # Set NA if Understands < 15, roughly the understanding level of a two-year-old. 
-      pop[[understand_col]] >= 15 ~ pop[[speak_col]] + age_rate[pop$age + 1] * language_exposures[[speak_col]], # Update existing proficiency
+      pop[[understand_col]] < speech_threshold ~ 0, # Set NA if < the understanding level of a two-year-old. 
+      pop[[understand_col]] >= speech_threshold ~ pop[[speak_col]] + learning_rate * language_exposures[[speak_col]], # Update existing proficiency
       .default = pop[[speak_col]] # Default case
     )
     
@@ -396,6 +459,9 @@ learn_languages_by_speaking <- function(language_exposures, pop){
   }
   return(pop)
 }
+
+
+
 
 
 
