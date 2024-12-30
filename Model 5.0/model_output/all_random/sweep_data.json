@@ -1,0 +1,4 @@
+{
+  "target_param": ["prop_of_intra_household_interactions"],
+  "target_param_values": [0.25, 0.5, 0.75]
+}

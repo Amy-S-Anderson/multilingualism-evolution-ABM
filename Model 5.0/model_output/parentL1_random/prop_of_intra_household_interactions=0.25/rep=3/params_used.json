@@ -1,0 +1,9 @@
+{
+  "generation_size": [100],
+  "generations_n": [11],
+  "languages_n": [3],
+  "prop_of_intra_household_interactions": [0.25],
+  "parent_language_choice": ["L1"],
+  "child_language_choice": ["random"],
+  "others_language_choice": ["random"]
+}
