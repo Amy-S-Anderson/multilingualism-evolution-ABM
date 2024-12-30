@@ -109,13 +109,15 @@ run_model_sweep = function(base_params, root_output_directory, target_param, tar
 
 
 ### Function to read in the data generated from a parameter sweep
-read_model_sweep = function(root_output_directory, target_param_values) {
+read_model_sweep = function(root_output_directory, target_param = "prop_of_intra_household_interactions", target_param_values) {
   sweep_results = list()
   
+  # for each value in the parameter being swept
   for (param_value in target_param_values) {
-    param_dir = file.path(root_output_directory, paste0("prop_of_intra_household_interactions=", param_value))
-    rep_dirs = list.dirs(param_dir, recursive = FALSE, full.names = TRUE)
+    param_dir = file.path(root_output_directory, paste0(target_param,"=", param_value)) # identify the directory where the output for that scenario is stored
+    rep_dirs = list.dirs(param_dir, recursive = FALSE, full.names = TRUE) # identify the file paths for all the iterations/runs of that scenario
     
+    # extract the output .csv file from each run
     rep_outputs = lapply(rep_dirs, function(rep_dir) {
       output_file = file.path(rep_dir, "output.csv")
       if (file.exists(output_file)) {
@@ -126,9 +128,11 @@ read_model_sweep = function(root_output_directory, target_param_values) {
       }
     })
     
+    # and save it as an entry in the sweep_results list, named with the target parameter value for this set of runs. 
     sweep_results[[paste0(target_param,"=",param_value)]] = rep_outputs
   }
   
+  # return a list of lists: one for each value of the target parameter, containing a list of model output data frames from the output.csv files
   return(sweep_results)
 }
 
