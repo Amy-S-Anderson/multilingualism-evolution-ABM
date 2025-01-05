@@ -9,6 +9,7 @@ get_default_params = function() {
   params["generation_size"] = 100
   params["generations_n"] = 11
   params["languages_n"] = 3
+  params["speaker_freqs"] = c(1/3, 1/3, 1/3)
   params["prop_of_intra_household_interactions"] = 0.5
   params["parent_language_choice"] = "random"
   params["child_language_choice"] = "random"
@@ -86,7 +87,4 @@ run_model_sweep(base_params = params,
 
 
 
-
-#### Next Task: Run each language choice scenario again, but sweep over options for the starting frequencies of monolingual speakers in generation 1.
-### This will require some tweaking of the model code to make this parameter movable, but it should be straightforward. 
 

@@ -20,6 +20,7 @@ get_default_params = function() {
   params["generation_size"] = 100
   params["generations_n"] = 11
   params["languages_n"] = 3
+  params["speaker_freq"] = c(1/3, 1/3, 1/3)
   params["prop_of_intra_household_interactions"] = 0.5
   params["parent_language_choice"] = "random"
   params["child_language_choice"] = "random"
