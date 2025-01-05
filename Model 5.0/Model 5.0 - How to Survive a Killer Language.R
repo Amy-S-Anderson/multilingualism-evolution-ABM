@@ -24,22 +24,26 @@
 
 # generations_n = an integer, the number of generations to run the model
 # generation_size = an integer, the number of agents in a generation. 
+# languages_n = an integer, the number of languages in this multilingual world
+# speaker_freqs = a vector of length languages_n, which sums to 1. This is the relative proportion of monolingual speakers in each language in the starting generation. 
 # prop_of_intra_household_interactions = a proportion between 0 and 1 that determines the average percent of each agent's conversations that are with the other member of their own household (their parent, if a child; or their child, if a parent), rather than with members of the community outside their own household. 
 # parent_language_choice = a character string denoting the language choice rule used by a parent speaking to their child, either "random" or "L1".
 # child_language_choice = a character string denoting the language choice rule used by a child speaking to their parent, either "random", "best known", or "L1"
 # others_language_choice = a character string denoting the language choice rule used by an agent speaking to any agen who is not their child, either "random", "best known", or "prestige_A". prestige_A means that language A is designated as the prestige language in the simulation. 
 
 generation_size = 20
-languages_n = 2
+languages_n = 3
 prop_of_intra_household_interactions = 0.5
-parent_language_choice = "random"
-child_language_choice = "random"
+speaker_freqs = c(0.5, 0.4, 0.1)
+parent_language_choice = "L1"
+child_language_choice = "best_known"
 others_language_choice = "random"
 generations_n = 2
 
 run_ABM <- function(generations_n,
                     generation_size,
                     languages_n,
+                    speaker_freqs,
                     prop_of_intra_household_interactions,
                     parent_language_choice,
                     child_language_choice,
@@ -47,7 +51,7 @@ run_ABM <- function(generations_n,
   
   #### GENERATE POPULATION DEMOGRAPHY #### 
   # Generate first parent cohort, all age 25, all monolingual in one of five languages (A-E)
-  agents <- start_cohort(n = generation_size, age = 25, n_languages = languages_n) 
+  agents <- start_cohort(n = generation_size, age = 25, n_languages = languages_n, speaker_freqs) 
     
   # Determine heritage language for each household
   heritage_language <- agents %>%
@@ -94,7 +98,7 @@ run_ABM <- function(generations_n,
       
       for(person in 1:length(interaction_list)){  
         focal_agent <- names(interaction_list[person]) # identify focal agent
-        # print(focal_agent)
+       #  print(focal_agent) ### This is useful for troubleshooting but otherwise slows the model down. 
         
         # Identify their parent/child from the agent trait data frame. 
         ## Note: One of these will always be empty, since an agent holds the role of child for the first 25 years of their life and then switches to the role of parent at age 25 when they give birth, at the same time that their parent dies.
@@ -175,7 +179,7 @@ run_ABM <- function(generations_n,
             
           }
           if(child_language_choice == "L1"){
-            agents_in_interaction[child_indices] <- select_best_language(agents_in_interaction[child_indices], 
+            agents_in_interaction[child_indices] <- select_heritage_language(agents_in_interaction[child_indices], 
                                                                          pop = agents,
                                                                          heritage_language,
                                                                          threshold_of_ability = 0)
@@ -279,9 +283,10 @@ run_ABM <- function(generations_n,
 
  # test <- run_ABM(generations_n = 1,
  #                 generation_size = 20,
- #                 languages_n = 4,
+ #                 languages_n = 3,
+ #                 speaker_freqs = c(0.2, 0.3, 0.5),
  #                 prop_of_intra_household_interactions = 0.5,
- #                parent_language_choice = "random",
- #                child_language_choice = "random",
+ #                parent_language_choice = "L1",
+ #                child_language_choice = "L1",
  #                others_language_choice = "random")
-
+ # 
