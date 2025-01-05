@@ -25,27 +25,47 @@ generate_agent_id <- function(start_value) { # the first start_value should be 0
 
 
 #### Generate Time0 Agents ####
-start_cohort <- function(n, age, n_languages) {
+start_cohort <- function(n, age, n_languages, speaker_freqs) {
+  # Validate speaker_freqs
+  if (length(speaker_freqs) != n_languages) {
+    stop("The length of 'speaker_freqs' must match 'n_languages'.")
+  }
+  if (abs(sum(speaker_freqs) - 1) > 1e-6) {
+    stop("The values in 'speaker_freqs' must sum to 1.")
+  }
+  
   # Generate the agent census dataframe
   agent_census <- data.frame(agent_id = sapply(seq(from = 0, length.out = n), FUN = generate_agent_id)) %>%
-    # uniform age structure
+    # Uniform age structure
     mutate(age = age,
-           # initiate year record
+           # Initiate year record
            year = 0,
            household = seq(from = 1, length.out = n))
   
   # Create columns for language proficiency variables
-  # Note: This can only handle up to 9 languages. More than this, and you will need to change the chartr() arguments. 
+  # Note: This can only handle up to 9 languages. More than this, and you will need to change the chartr() arguments.
   languages <- c(paste("Speaks", chartr("123456789", "ABCDEFGHI", seq(n_languages)), sep = " "),
                  paste("Understands", chartr("123456789", "ABCDEFGHI", seq(n_languages)), sep = " ")
   )
   agent_languages <- as.data.frame(matrix(0, nrow = nrow(agent_census), ncol = length(languages)))
   names(agent_languages) <- languages
   
-  # Divide agents equally among languages
+  # Determine the number of agents per language based on speaker_freqs
+  agent_counts <- round(speaker_freqs * n)
+  total_assigned <- sum(agent_counts)
+  
+  # Handle rounding adjustment to ensure the total number of agents equals n
+  if (total_assigned != n) {
+    adjustment <- n - total_assigned
+    agent_counts[which.max(speaker_freqs)] <- agent_counts[which.max(speaker_freqs)] + adjustment
+  }
+  
+  # Assign languages to agents based on the calculated counts
+  agent_language_assignment <- rep(seq(n_languages), times = agent_counts)
+  
   for (i in 1:nrow(agent_census)) {
-    # Determine which language this agent will speak and understand
-    language_idx <- (i - 1) %% n_languages + 1
+    # Determine the assigned language for this agent
+    language_idx <- agent_language_assignment[i]
     language_name <- chartr("123456789", "ABCDEFGHI", language_idx)
     
     # Set their proficiency to 100 for the assigned language
@@ -58,8 +78,6 @@ start_cohort <- function(n, age, n_languages) {
   
   return(agent_census)
 }
-
-
 
 
 
@@ -251,11 +269,15 @@ select_best_language = function(agents_to_speak, pop) {
     pivot_longer(cols = speaks, names_to = "speaks", values_to = "speaking_level")
   
   language_data <- merge(understanding_data, speaking_data, by = "agent_id") %>%
-    filter(skill_level > 15) %>%
-    group_by(agent_id) %>%
-    filter(speaking_level == max(speaking_level, na.rm = T)) %>%
-    mutate(chosen_language = sample(speaks, size = 1)) %>%
-    select(agent_id, chosen_language)
+    filter(skill_level > 15)
+  if(nrow(language_data > 0)){
+    language_data <- language_data %>%
+      group_by(agent_id) %>%
+      filter(speaking_level == max(speaking_level, na.rm = T)) %>%
+      mutate(chosen_language = sample(speaks, size = 1)) %>%
+      select(agent_id, chosen_language)
+  } 
+    
   
   spoken = rep("none", length(agents_to_speak))
   has_speech = which(agents_to_speak %in% language_data$agent_id) #vector of true/false, corresponding to agents_to_speak
@@ -285,7 +307,6 @@ select_best_language = function(agents_to_speak, pop) {
 # heritage language = a data frame of two columns: household ID and name of that household's heritage language (the language assigned to the monolingual ancestor in the immaculate conception generation (generation 1))
 # threshold_of_ability = a number between 0 and 100. The speaking value above which an agent *can* choose to speak their heritage language. This is likely to be quite high for parents choosing whether to speak this language to their children, but can be 0 for children just beginning to learn the language. 
 
-
 select_heritage_language <- function(agents_to_speak, pop, heritage_language, threshold_of_ability){
   #get column names for degree of language understood
   understands <- names(pop)[which(startsWith(names(pop), "Understands"))]
@@ -300,6 +321,7 @@ select_heritage_language <- function(agents_to_speak, pop, heritage_language, th
     filter(skill_level > (100/12) * 2) # retains only rows with data on a language that an agent understands well enough to speak it.
   
   # extract each agent's degree of speaking skill in each language.
+  if(nrow(understanding_data) > 0){
   speaking_data <- pop %>% 
     filter(agent_id %in% understanding_data$agent_id) %>%
     select(agent_id, all_of(speaks), household) %>%
@@ -307,6 +329,7 @@ select_heritage_language <- function(agents_to_speak, pop, heritage_language, th
     group_by(agent_id) %>%
     # identify which language is their best known language (and if languages are tied for best known, pick one of them)
     mutate(best_known = sample(speaks[which.max(speaking_level)], 1))
+  
   
   #identify the heritage language in each household
   heritage = pop %>%
@@ -323,12 +346,12 @@ select_heritage_language <- function(agents_to_speak, pop, heritage_language, th
     distinct() %>%
     mutate(spoken = if_else(heritage_speaker == "yes", L1, best_known)) %>%
     select(agent_id, spoken) 
-  
+  }
   
   has_speech <- which(agents_to_speak %in% understanding_data$agent_id)  # Vector of true/false, corresponding to agents_to_speak
   # Match the chosen language to the agents_to_speak
   spoken <- rep("none", length(agents_to_speak))
-  if (nrow(speaker_options) > 0) {  # Only assign languages if at least one agent has a valid choice
+  if (length(has_speech) > 0) {  # Only assign languages if at least one agent has a valid choice
     # Match agents_to_speak with their chosen language
     chosen_languages <- speaker_options$spoken[match(agents_to_speak[has_speech], speaker_options$agent_id)]
     
