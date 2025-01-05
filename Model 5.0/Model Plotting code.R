@@ -27,9 +27,15 @@
 # Across generations within a household
 # -	Parent natal language and child speaking values in each of the three languages (at age 24? (the age right before children become parents)). 
 
-  
-sweep_results <- read_model_sweep(root_output_directory = "./Model 5.0/model_output/test_sweep", target_param_values = c(0.5, 0.75))
-sweep_random = read_model_sweep(root_output_directory = "./Model 5.0/model_output/all_random", target_param_values = c(0.25, 0.5, 0.75))
+for(scenario in)
+
+# Read in the output of the model sweep. 
+sweep_results = read_model_sweep(root_output_directory = "./Model 5.0/model_output/all_random/", target_param_values = c(0.25, 0.5, 0.75))
+
+
+sweep_results = read_model_sweep(root_output_directory = "./Model 5.0/model_output/unbalanced_speakers/parentL1_random/", target_param_values = c(0.25, 0.5, 0.75))
+
+
 
 #  This function returns a table summarizing the number of speakers of each language in each generation. You must specify the age of the speakers you want to count, and the threshold of speaking ability that you will count as 'speaking' the language. Defaults to 100 (mastery)
 count_age_specific_speakers <- function(output, efficacy_threshold = 100, count_age){
@@ -48,24 +54,8 @@ count_age_specific_speakers <- function(output, efficacy_threshold = 100, count_
 
 
 
-# This function tallies up the number of languages spoken by each agent. You must specify the age of the speakers you want to count, and the threshold of speaking ability that you will count as 'speaking' the language. 
-count_languages_per_person <- function(output, efficacy_threshold, count_age) {
-  language_count_table <- output %>%
-    filter(age == count_age) %>%  # Filter rows for the specified age
-    select(agent_id, starts_with("Speaks")) %>%  # Select columns related to speaking ability
-    mutate(generation = (agent_id - 1) %/% 100 + 1) %>%  # Compute generation based on agent_id
-    rowwise() %>%  # Process each row individually
-    mutate(n_languages_known = sum(c_across(starts_with("Speaks")) == efficacy_threshold)) %>%  # Count languages with ability == threshold
-    ungroup()  # Remove rowwise grouping to return a regular tibble
-  
-  return(language_count_table)  # Return the data frame with a new vector of language counts for each person added
-}
-
-
-
-
 ### Create a list of # of speakers of each language, aged 49, for each run of the model across each target_param value of the sweep
-speaker_counts <- list() # Initialize the list to store results
+speaker_counts_25 <- list() # Initialize the list to store results
 # fill the list
  for(param_set_name in names(sweep_results)){
    ### Count the number of speakers of each language at the end of each generation
@@ -82,39 +72,35 @@ speaker_counts <- list() # Initialize the list to store results
     return(speakers)
   })
   
-  speaker_counts[[param_set_name]] <- do.call(rbind, count_speakers)
-  speaker_counts[[param_set_name]] <- speaker_counts[[param_set_name]] %>%
+  speaker_counts_25[[param_set_name]] <- do.call(rbind, count_speakers)
+  speaker_counts_25[[param_set_name]] <- speaker_counts_25[[param_set_name]] %>%
     clean_names(case = "big_camel") # changes column names from snake_case to UpperCamel (makes axis labeling of plots prettier since single-word variable names will all be capitalized)
 }
 
 
 
 
-
-
-
-### Create a list of # of languages spoken by each agent, aged 49, in each generation for each run of the model across each target_param value of the sweep
-languages_per_speaker <- list()
+speaker_counts_49 <- list() # Initialize the list to store results
 # fill the list
 for(param_set_name in names(sweep_results)){
-### Count the number of languages spoken by each agent at the end of each generation
-language_counts <- lapply(seq_along(sweep_results[[param_set_name]]), function(rep_index) {
-  # Access the data frame for the current repetition
-  rep_data <- sweep_results[[param_set_name]][[rep_index]] %>%
-    filter(age == 49) %>% 
-  # count languages
-  count_languages_per_person(count_age = 49, efficacy_threshold = 100) %>%
-    mutate(rep = rep_index) %>%
-    select(generation, n_languages_known, rep) %>%
-    clean_names(case = "big_camel") 
-  return(rep_data)
-})
-
-languages_per_speaker[[param_set_name]] <- do.call(rbind, language_counts) 
+  ### Count the number of speakers of each language at the end of each generation
+  count_speakers <- lapply(seq_along(sweep_results[[param_set_name]]), function(rep_index) {
+    # Access the data frame for the current repetition
+    rep_data <- sweep_results[[param_set_name]][[rep_index]]
+    
+    # Count speakers
+    speakers <- count_age_specific_speakers(rep_data, count_age = 49)
+    
+    # Assign the repetition number
+    speakers$rep = rep_index
+    
+    return(speakers)
+  })
+  
+  speaker_counts_49[[param_set_name]] <- do.call(rbind, count_speakers)
+  speaker_counts_49[[param_set_name]] <- speaker_counts_49[[param_set_name]] %>%
+    clean_names(case = "big_camel") # changes column names from snake_case to UpperCamel (makes axis labeling of plots prettier since single-word variable names will all be capitalized)
 }
-
-
-
 
 
 
@@ -181,7 +167,7 @@ lineplot_model_output <- function(plot_data, x, y,
         labs(x = labs_x, y = labs_y, title = plot_title, color = split_by) +
         scale_color_viridis_d(guide = "legend") +
         scale_fill_viridis_d(guide = "legend") +
-        theme(legend.position = "bottom")
+        theme(legend.position = "bottom") 
       
       # Add legend to the last position in the plots list
       plots[[length(plots)]] <- get_legend(legend_plot)
@@ -210,85 +196,30 @@ lineplot_model_output <- function(plot_data, x, y,
 
 
 
-speaker_count_plots = lineplot_model_output(speaker_counts, 
+speaker_count_25_plots = lineplot_model_output(speaker_counts_25, 
                                         x = "Generation", 
                                         y = "SpeakersPercent",
                                         split_by = "Language",
                                         labs_y = "% of population")
 
 
+speaker_count_49_plots = lineplot_model_output(speaker_counts_49, 
+                                               x = "Generation", 
+                                               y = "SpeakersPercent",
+                                               split_by = "Language",
+                                               labs_y = "% of population")
 
 
-# Function to produce a bar plot of a count variable tracked across generations. 
-distribution_plot_model_output <- function(plot_data, x, 
-                                           split_by, 
-                                           labs_x = x, 
-                                           labs_y = "Count",
-                                           color_legend,
-                                           title = "Proportion of conversations within own household") {
-  # Initialize a list to store the plots
-  plots <- vector("list", length(plot_data) + 1)
-  
-  for (scenario in seq_along(plot_data)) {
-    # Extract scenario title
-    parts <- strsplit(names(plot_data)[[scenario]], "=")[[1]]
-    plot_title <- paste0(title, " = ", parts[[2]])
-    data <- plot_data[[scenario]]  # Extract data for this scenario
-    
-    # Check if x and split_by columns exist in data
-    if (!all(c(x, split_by) %in% names(data))) {
-      stop(paste("Columns", x, "or", split_by, "not found in data frame for scenario", scenario))
-    }
-    
-    # Save the legend in the first iteration
-    if (scenario == 2) { # NOTE: ACTUALLY, setting this to the second plot because plot 1 currently doesn't have the full range of values for language counts, so colors are in the compound plot that aren't mapped to the color legend.
-      legend_plot <- ggplot(data, aes(
-        x = .data[[x]], 
-        fill = as.factor(.data[[split_by]])
-      )) +
-        geom_bar() +
-        theme_linedraw() +
-        labs(x = labs_x, y = labs_y, title = plot_title, fill = color_legend) +
-        scale_fill_viridis_d(guide = "legend") +
-        theme(legend.position = "bottom")
-      
-      # Add legend to the last position in the plots list
-      plots[[length(plots)]] <- get_legend(legend_plot)
-      names(plots)[[length(plots)]] <- "legend"
-    }
-    
-    # Create the plot for the current scenario (without the legend)
-    plots[[scenario]] <- ggplot(data, aes(
-      x = .data[[x]], 
-      fill = as.factor(.data[[split_by]])
-    )) +
-      geom_bar() +
-      theme_linedraw() +
-      scale_x_continuous(expand = c(0.01, 0.01), breaks = int_breaks) +
-      labs(x = labs_x, y = labs_y, title = plot_title, fill = color_legend) +
-      scale_fill_viridis_d(guide = "legend") +
-      theme(legend.position = "none")
-  }
-  
-  return(plots)
-}
-
-language_count_plots <- distribution_plot_model_output(languages_per_speaker,
-                               x = "Generation",
-                               split_by = "NLanguagesKnown",
-                               color_legend = "# Languages Known")
-
-
-
-
-# Make compound plot: Number of speakers of each language in each generation, across parameter sweep values
-plot_grid(plotlist = speaker_count_plots,
+# Make compound plot: Number of speakers of each language in each generation at age 25, across parameter sweep values
+plot_25 = plot_grid(plotlist = speaker_count_25_plots,
           ncol = 1, rel_heights = c(rep(1, length(speaker_count_plots) - 1),0.25))
 
-# Make compound plot: Number of languages spoken by each agent in each generation, across parameter sweep values
-plot_grid(plotlist = language_count_plots,
-          ncol = 1, rel_heights = c(rep(1, length(language_count_plots) - 1),0.25))
+# Compound plot: # of speakers of each language in each generation at age 49, across parameter sweep values
+plot_49 = plot_grid(plotlist = speaker_count_49_plots,
+          ncol = 1, rel_heights = c(rep(1, length(speaker_count_plots) - 1),0.25))
 
+
+save_plot(plot_25, filename = )
 
 
 
